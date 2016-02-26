@@ -587,8 +587,7 @@ public class DiscoveryWithServiceDisruptionsIT extends ESIntegTestCase {
 
         // restore GC
         masterNodeDisruption.stopDisrupting();
-        ensureStableCluster(3, new TimeValue(DISRUPTION_HEALING_OVERHEAD.millis() + masterNodeDisruption.expectedTimeToHeal().millis()), false,
-                oldNonMasterNodes.get(0));
+        ensureStableCluster(3, new TimeValue(DISRUPTION_HEALING_OVERHEAD.millis() + masterNodeDisruption.expectedTimeToHeal().millis()), false, oldNonMasterNodes.get(0));
 
         // make sure all nodes agree on master
         String newMaster = internalCluster().getMasterName();
@@ -1016,21 +1015,21 @@ public class DiscoveryWithServiceDisruptionsIT extends ESIntegTestCase {
         assertTrue(client().prepareGet("index", "doc", "1").get().isExists());
     }
 
-    // tests if indices are really deleted even if a master transition inbetween
-    @AwaitsFix(bugUrl = "https://github.com/elastic/elasticsearch/issues/11665")
-    @Test
+    /**
+     * Tests that indices are properly deleted even if there is a master transition in between.
+     * Test for https://github.com/elastic/elasticsearch/issues/11665
+     */
     public void testIndicesDeleted() throws Exception {
         configureUnicastCluster(3, null, 2);
-        Future<List<String>> masterNodes= internalCluster().startMasterOnlyNodesAsync(2);
-        Future<String> dataNode = internalCluster().startDataOnlyNodeAsync();
-        dataNode.get();
-        masterNodes.get();
+        internalCluster().startMasterOnlyNode(Settings.EMPTY);
+        internalCluster().startMasterOnlyNode(Settings.EMPTY);
+        String dataNode = internalCluster().startDataOnlyNode(Settings.EMPTY);
         ensureStableCluster(3);
         assertAcked(prepareCreate("test"));
         ensureYellow();
 
         String masterNode1 = internalCluster().getMasterName();
-        NetworkPartition networkPartition = new NetworkUnresponsivePartition(masterNode1, dataNode.get(), getRandom());
+        NetworkPartition networkPartition = new NetworkUnresponsivePartition(masterNode1, dataNode, getRandom());
         internalCluster().setDisruptionScheme(networkPartition);
         networkPartition.startDisrupting();
         internalCluster().client(masterNode1).admin().indices().prepareDelete("test").setTimeout("1s").get();
