@@ -111,5 +111,18 @@ public abstract class ESBlobStoreContainerTestCase extends ESTestCase {
         }
     }
 
+    public void testCannotOverwriteBlob() throws IOException {
+        try (final BlobStore store = newBlobStore()) {
+            final BlobContainer container = store.blobContainer(new BlobPath());
+            final String blobName = "foobar";
+            final BytesArray bytesArray = new BytesArray(randomBytes(randomIntBetween(10, 100)));
+            container.writeBlob(blobName, bytesArray);
+            // should not be able to overwrite existing blob
+            expectThrows(IOException.class, () -> container.writeBlob(blobName, bytesArray));
+            container.deleteBlob(blobName);
+            container.writeBlob(blobName, bytesArray); // after deleting the previous blob, we should be able to write to it again
+        }
+    }
+
     protected abstract BlobStore newBlobStore() throws IOException;
 }

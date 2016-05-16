@@ -283,6 +283,7 @@ public class BlobStoreFormatIT extends AbstractSnapshotIntegTestCase {
             int location = randomIntBetween(0, buffer.length - 1);
             buffer[location] = (byte) (buffer[location] ^ 42);
         } while (originalChecksum == checksum(buffer));
+        blobContainer.deleteBlob(blobName);
         blobContainer.writeBlob(blobName, new BytesArray(buffer));
     }
 
