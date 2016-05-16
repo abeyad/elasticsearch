@@ -318,7 +318,7 @@ public class BlobStoreIndexShardRepository extends AbstractComponent implements 
             int fileListGeneration = tuple.v2();
 
             try {
-                indexShardSnapshotFormat(version).delete(blobContainer, snapshotId.getName());
+                indexShardSnapshotFormat(version).delete(blobContainer, snapshotId.blobId());
             } catch (IOException e) {
                 logger.debug("[{}] [{}] failed to delete shard snapshot file", shardId, snapshotId);
             }
@@ -339,7 +339,7 @@ public class BlobStoreIndexShardRepository extends AbstractComponent implements 
          */
         public BlobStoreIndexShardSnapshot loadSnapshot() {
             try {
-                return indexShardSnapshotFormat(version).read(blobContainer, snapshotId.getName());
+                return indexShardSnapshotFormat(version).read(blobContainer, snapshotId.blobId());
             } catch (IOException ex) {
                 throw new IndexShardRestoreFailedException(shardId, "failed to read shard snapshot file", ex);
             }
@@ -612,7 +612,7 @@ public class BlobStoreIndexShardRepository extends AbstractComponent implements 
                 //TODO: The time stored in snapshot doesn't include cleanup time.
                 logger.trace("[{}] [{}] writing shard snapshot file", shardId, snapshotId);
                 try {
-                    indexShardSnapshotFormat.write(snapshot, blobContainer, snapshotId.getName());
+                    indexShardSnapshotFormat.write(snapshot, blobContainer, snapshotId.blobId());
                 } catch (IOException e) {
                     throw new IndexShardSnapshotFailedException(shardId, "Failed to write commit point", e);
                 }

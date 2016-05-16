@@ -279,16 +279,16 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent<Rep
         try {
             final String snapshotName = snapshotId.getName();
             if (snapshotFormat.exists(snapshotsBlobContainer, snapshotId.blobId()) ||
-                    snapshotLegacyFormat.exists(snapshotsBlobContainer, snapshotName)) {
+                    snapshotLegacyFormat.exists(snapshotsBlobContainer, snapshotId.blobId())) {
                 throw new InvalidSnapshotNameException(snapshotId.getSnapshot(), "snapshot with such name already exists");
             }
             // Write Global MetaData
-            globalMetaDataFormat.write(metaData, snapshotsBlobContainer, snapshotName);
+            globalMetaDataFormat.write(metaData, snapshotsBlobContainer, snapshotId.blobId());
             for (String index : indices) {
                 final IndexMetaData indexMetaData = metaData.index(index);
                 final BlobPath indexPath = basePath().add("indices").add(index);
                 final BlobContainer indexMetaDataBlobContainer = blobStore().blobContainer(indexPath);
-                indexMetaDataFormat.write(indexMetaData, indexMetaDataBlobContainer, snapshotName);
+                indexMetaDataFormat.write(indexMetaData, indexMetaDataBlobContainer, snapshotId.blobId());
             }
         } catch (IOException ex) {
             throw new SnapshotCreationException(snapshotId.getSnapshot(), ex);
@@ -324,17 +324,16 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent<Rep
             logger.warn("cannot read metadata for snapshot [{}]", ex, snapshotId);
         }
         try {
-            final String snapshotName = snapshotId.getName();
             // Delete snapshot file first so we wouldn't end up with partially deleted snapshot that looks OK
             if (snapshot != null) {
                 snapshotFormat(snapshot.version()).delete(snapshotsBlobContainer, snapshotId.blobId());
-                globalMetaDataFormat(snapshot.version()).delete(snapshotsBlobContainer, snapshotName);
+                globalMetaDataFormat(snapshot.version()).delete(snapshotsBlobContainer, snapshotId.blobId());
             } else {
                 // We don't know which version was the snapshot created with - try deleting both current and legacy formats
                 snapshotFormat.delete(snapshotsBlobContainer, snapshotId.blobId());
-                snapshotLegacyFormat.delete(snapshotsBlobContainer, snapshotName);
-                globalMetaDataLegacyFormat.delete(snapshotsBlobContainer, snapshotName);
-                globalMetaDataFormat.delete(snapshotsBlobContainer, snapshotName);
+                snapshotLegacyFormat.delete(snapshotsBlobContainer, snapshotId.blobId());
+                globalMetaDataLegacyFormat.delete(snapshotsBlobContainer, snapshotId.blobId());
+                globalMetaDataFormat.delete(snapshotsBlobContainer, snapshotId.blobId());
             }
             // Delete snapshot from the snapshot list
             List<SnapshotId> snapshotIds = snapshots();
@@ -353,7 +352,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent<Rep
                 BlobPath indexPath = basePath().add("indices").add(index);
                 BlobContainer indexMetaDataBlobContainer = blobStore().blobContainer(indexPath);
                 try {
-                    indexMetaDataFormat(snapshot.version()).delete(indexMetaDataBlobContainer, snapshotId.getName());
+                    indexMetaDataFormat(snapshot.version()).delete(indexMetaDataBlobContainer, snapshotId.blobId());
                 } catch (IOException ex) {
                     logger.warn("[{}] failed to delete metadata for index [{}]", ex, snapshotId, index);
                 }
@@ -454,7 +453,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent<Rep
             // When we delete corrupted snapshots we might not know which version we are dealing with
             // We can try detecting the version based on the metadata file format
             assert ignoreIndexErrors;
-            if (globalMetaDataFormat.exists(snapshotsBlobContainer, snapshotId.getName())) {
+            if (globalMetaDataFormat.exists(snapshotsBlobContainer, snapshotId.blobId())) {
                 snapshotVersion = Version.CURRENT;
             } else if (globalMetaDataLegacyFormat.exists(snapshotsBlobContainer, snapshotId.getName())) {
                 throw new SnapshotException(snapshotId.getSnapshot(), "snapshot is too old");
@@ -463,7 +462,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent<Rep
             }
         }
         try {
-            metaData = globalMetaDataFormat(snapshotVersion).read(snapshotsBlobContainer, snapshotId.getName());
+            metaData = globalMetaDataFormat(snapshotVersion).read(snapshotsBlobContainer, snapshotId.blobId());
         } catch (FileNotFoundException | NoSuchFileException ex) {
             throw new SnapshotMissingException(snapshotId.getSnapshot(), ex);
         } catch (IOException ex) {
@@ -474,7 +473,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent<Rep
             BlobPath indexPath = basePath().add("indices").add(index);
             BlobContainer indexMetaDataBlobContainer = blobStore().blobContainer(indexPath);
             try {
-                metaDataBuilder.put(indexMetaDataFormat(snapshotVersion).read(indexMetaDataBlobContainer, snapshotId.getName()), false);
+                metaDataBuilder.put(indexMetaDataFormat(snapshotVersion).read(indexMetaDataBlobContainer, snapshotId.blobId()), false);
             } catch (ElasticsearchParseException | IOException ex) {
                 if (ignoreIndexErrors) {
                     logger.warn("[{}] [{}] failed to read metadata for index", ex, snapshotId, index);

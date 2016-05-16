@@ -19,6 +19,7 @@
 
 package org.elasticsearch.cluster.metadata;
 
+import org.elasticsearch.common.UUIDs;
 import org.elasticsearch.common.io.stream.ByteBufferStreamInput;
 import org.elasticsearch.common.io.stream.BytesStreamOutput;
 import org.elasticsearch.snapshots.Snapshot;
@@ -53,6 +54,19 @@ public class SnapshotIdTests extends ESTestCase {
         original.writeTo(out);
         final ByteBufferStreamInput in = new ByteBufferStreamInput(ByteBuffer.wrap(out.bytes().toBytes()));
         assertThat(new SnapshotId(in), Matchers.equalTo(original));
+    }
+
+    public void testBlobId() {
+        // new version of blob ids
+        final String uuid = UUIDs.randomBase64UUID();
+        final String repoName = randomAsciiOfLength(5);
+        final String snapshotName = randomAsciiOfLength(5);
+        SnapshotId snapshotId = SnapshotId.get(new Snapshot(repoName, snapshotName), uuid);
+        assertThat(snapshotId.blobId(), equalTo(uuid));
+
+        // old version of blob ids, just the snapshot name
+        snapshotId = SnapshotId.get(new Snapshot(repoName, snapshotName), SnapshotId.UNASSIGNED_UUID);
+        assertThat(snapshotId.blobId(), equalTo(snapshotName));
     }
 
 }

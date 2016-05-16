@@ -157,7 +157,7 @@ public class SnapshotId implements Writeable {
             // the old snapshot blob naming
             return snapshot.getName();
         }
-        return snapshot.getName() + "-" + uuid;
+        return uuid;
     }
 
 }
