@@ -110,42 +110,45 @@ public class TransportRolloverAction extends TransportMasterNodeAction<RolloverR
                         : generateRolloverIndexName(sourceIndexName);
                     if (rolloverRequest.isDryRun()) {
                         listener.onResponse(
-                            new RolloverResponse(sourceIndexName, rolloverIndexName, conditionResults, true, false));
+                            new RolloverResponse(sourceIndexName, rolloverIndexName, conditionResults, true, false, false));
                         return;
                     }
                     if (conditionResults.size() == 0 || conditionResults.stream().anyMatch(result -> result.matched)) {
-                        createIndexService.createIndex(prepareCreateIndexRequest(rolloverIndexName, rolloverRequest),
-                            new ActionListener<ClusterStateUpdateResponse>() {
-                                @Override
-                                public void onResponse(ClusterStateUpdateResponse response) {
-                                    // switch the alias to point to the newly created index
-                                    indexAliasesService.indicesAliases(
-                                        prepareRolloverAliasesUpdateRequest(sourceIndexName, rolloverIndexName,
-                                            rolloverRequest),
-                                        new ActionListener<ClusterStateUpdateResponse>() {
-                                            @Override
-                                            public void onResponse(ClusterStateUpdateResponse clusterStateUpdateResponse) {
-                                                listener.onResponse(
-                                                    new RolloverResponse(sourceIndexName, rolloverIndexName,
-                                                        conditionResults, false, true));
-                                            }
+                        CreateIndexClusterStateUpdateRequest updateRequest = prepareCreateIndexRequest(rolloverIndexName, rolloverRequest);
+                        ActionListener<RolloverResponse> wrappedListener = new ActionListener<RolloverResponse>() {
 
-                                            @Override
-                                            public void onFailure(Exception e) {
-                                                listener.onFailure(e);
-                                            }
-                                        });
-                                }
+                            @Override
+                            public void onResponse(RolloverResponse rolloverResponse) {
+                                // switch the alias to point to the newly created index
+                                indexAliasesService.indicesAliases(
+                                    prepareRolloverAliasesUpdateRequest(sourceIndexName, rolloverIndexName,
+                                        rolloverRequest),
+                                    new ActionListener<ClusterStateUpdateResponse>() {
+                                        @Override
+                                        public void onResponse(ClusterStateUpdateResponse clusterStateUpdateResponse) {
+                                            // TODO: what happens if this ClusterStateUpdateResponse is not acknowledged?
+                                            listener.onResponse(rolloverResponse);
+                                        }
 
-                                @Override
-                                public void onFailure(Exception t) {
-                                    listener.onFailure(t);
-                                }
-                            });
+                                        @Override
+                                        public void onFailure(Throwable e) {
+                                            listener.onFailure(e);
+                                        }
+                                    });
+                            }
+
+                            @Override
+                            public void onFailure(Throwable e) {
+                                listener.onFailure(e);
+                            }
+
+                        };
+                        createIndexService.createIndexAndWaitForActiveShards(updateRequest, wrappedListener, (acked, timedOut) ->
+                            new RolloverResponse(sourceIndexName, rolloverIndexName, conditionResults, false, true, timedOut));
                     } else {
                         // conditions not met
                         listener.onResponse(
-                            new RolloverResponse(sourceIndexName, sourceIndexName, conditionResults, false, false)
+                            new RolloverResponse(sourceIndexName, sourceIndexName, conditionResults, false, false, false)
                         );
                     }
                 }
@@ -216,6 +219,7 @@ public class TransportRolloverAction extends TransportMasterNodeAction<RolloverR
             .masterNodeTimeout(createIndexRequest.masterNodeTimeout())
             .settings(createIndexRequest.settings())
             .aliases(createIndexRequest.aliases())
+            .waitForActiveShards(createIndexRequest.waitForActiveShards())
             .mappings(createIndexRequest.mappings());
     }
 
