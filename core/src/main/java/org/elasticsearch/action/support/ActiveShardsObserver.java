@@ -33,18 +33,17 @@ import org.elasticsearch.node.NodeClosedException;
 import org.elasticsearch.threadpool.ThreadPool;
 
 import java.util.function.BiFunction;
-import java.util.function.Consumer;
 
 /**
  * This class provides primitives for waiting for a configured number of shards
  * to become active before sending a response on an {@link ActionListener}.
  */
-public class ActiveShardsWaiter extends AbstractComponent {
+public class ActiveShardsObserver extends AbstractComponent {
 
     private final ClusterService clusterService;
     private final ThreadPool threadPool;
 
-    public ActiveShardsWaiter(final Settings settings, final ClusterService clusterService, final ThreadPool threadPool) {
+    public ActiveShardsObserver(final Settings settings, final ClusterService clusterService, final ThreadPool threadPool) {
         super(settings);
         this.clusterService = clusterService;
         this.threadPool = threadPool;
@@ -59,14 +58,12 @@ public class ActiveShardsWaiter extends AbstractComponent {
      * @param actionListener the main listener that is listening for responses from the index creation event
      * @param onResult a function that takes the cluster state update acknowledged flag and timed out flag as parameters
      *                 and returns a response to be sent on the listener
-     * @param onFailure executed on failure of the cluster state update, with the Throwable passed as input
      * @return ActionListener for responding to index creation cluster state events and sending the action response
      *         over the main listener, after waiting for the requested number of shards to be active
      */
-    public <T> ActionListener<ClusterStateUpdateResponse> wrapUpdateListenerWithWaiting(final CreateIndexClusterStateUpdateRequest request,
-                                                                                        final ActionListener<T> actionListener,
-                                                                                        final BiFunction<Boolean, Boolean, T> onResult,
-                                                                                        final Consumer<Throwable> onFailure) {
+    public <T> ActionListener<ClusterStateUpdateResponse> waitForActiveShards(final CreateIndexClusterStateUpdateRequest request,
+                                                                              final ActionListener<T> actionListener,
+                                                                              final BiFunction<Boolean, Boolean, T> onResult) {
         return new ActionListener<ClusterStateUpdateResponse>() {
             @Override
             public void onResponse(ClusterStateUpdateResponse response) {
@@ -131,7 +128,6 @@ public class ActiveShardsWaiter extends AbstractComponent {
 
             @Override
             public void onFailure(Throwable t) {
-                onFailure.accept(t);
                 actionListener.onFailure(t);
             }
         };

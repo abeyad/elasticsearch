@@ -31,6 +31,34 @@
   - match: { test_index.settings.index.number_of_replicas: "0"}
 
 ---
+"Create index with too large wait_for_active_shards":
+
+  - do:
+      indices.create:
+        index: test_index
+        master_timeout: 100ms
+        wait_for_active_shards: 6
+        body:
+          settings:
+            number_of_replicas: 5
+
+  - match: { timed_out_waiting_for_shards: true }
+
+---
+"Create index with wait_for_active_shards set to all":
+
+  - do:
+      indices.create:
+        index: test_index
+        wait_for_active_shards: all
+        body:
+          settings:
+            number_of_replicas: "0"
+
+  - match: { acknowledged: true }
+  - match: { timed_out_waiting_for_shards: false }
+
+---
 "Create index with aliases":
 
   - do:

@@ -57,7 +57,7 @@ public final class ActiveShardCount implements Writeable {
      * Get an ActiveShardCount instance for the given value.  The value is first validated to ensure
      * it is a valid shard count and throws an IllegalArgumentException if validation fails.  Valid
      * values are any non-negative number.  Directly use {@link ActiveShardCount#DEFAULT} for the
-     * default value (which is half the shards) or {@link ActiveShardCount#ALL} to specify all the shards.
+     * default value (which is one shard copy) or {@link ActiveShardCount#ALL} to specify all the shards.
      */
     public static ActiveShardCount from(final int value) {
         if (value < 0) {
@@ -102,12 +102,18 @@ public final class ActiveShardCount implements Writeable {
      * one active shard.
      */
     public int resolve(final IndexMetaData indexMetaData) {
+        final ActiveShardCount activeShardCount;
         if (this == ActiveShardCount.DEFAULT) {
+            activeShardCount = WAIT_FOR_ACTIVE_SHARDS_SETTING.get(indexMetaData.getSettings());
+        } else {
+            activeShardCount = this;
+        }
+        if (activeShardCount == ActiveShardCount.DEFAULT) {
             return 1;
-        } else if (this == ActiveShardCount.ALL) {
+        } else if (activeShardCount == ActiveShardCount.ALL) {
             return indexMetaData.getNumberOfReplicas() + 1;
         } else {
-            return value;
+            return activeShardCount.value;
         }
     }
 
@@ -143,7 +149,12 @@ public final class ActiveShardCount implements Writeable {
             return true;
         }
         final IndexMetaData indexMetaData = clusterState.metaData().index(indexName);
-        assert indexMetaData != null;
+        if (indexMetaData == null) {
+            // its possible the index was deleted while waiting for active shard copies,
+            // in this case, we'll just consider it that we have enough active shard copies
+            // and we can stop waiting
+            return true;
+        }
         final ActiveShardCount waitForActiveShards;
         if (this == ActiveShardCount.DEFAULT) {
             waitForActiveShards = WAIT_FOR_ACTIVE_SHARDS_SETTING.get(indexMetaData.getSettings());
@@ -157,7 +168,7 @@ public final class ActiveShardCount implements Writeable {
             return false;
         }
         for (final IntObjectCursor<IndexShardRoutingTable> shardRouting : indexRoutingTable.getShards()) {
-            if (waitForActiveShards.checkWaitForActiveShards(shardRouting.value, indexMetaData) == false) {
+            if (waitForActiveShards.enoughShardsActive(shardRouting.value, indexMetaData) == false) {
                 // not enough active shard copies yet
                 return false;
             }
@@ -169,7 +180,7 @@ public final class ActiveShardCount implements Writeable {
      * Returns true iff the active shard count in the shard routing table is enough
      * to meet the required shard count represented by this instance.
      */
-    public boolean checkWaitForActiveShards(final IndexShardRoutingTable shardRoutingTable, final IndexMetaData indexMetaData) {
+    public boolean enoughShardsActive(final IndexShardRoutingTable shardRoutingTable, final IndexMetaData indexMetaData) {
         if (shardRoutingTable.activeShards().size() < resolve(indexMetaData)) {
             // not enough active shard copies yet
             return false;

@@ -28,7 +28,7 @@
         },
         "wait_for_active_shards": {
           "type" : "string",
-          "description" : "Set the number of active shards to wait for before proceeding with the operation."
+          "description" : "Set the number of active shards to wait for on the shrunken index before the operation returns."
         }
       }
     },

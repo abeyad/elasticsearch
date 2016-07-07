@@ -27,7 +27,7 @@ import org.elasticsearch.Version;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.admin.indices.alias.Alias;
 import org.elasticsearch.action.admin.indices.create.CreateIndexClusterStateUpdateRequest;
-import org.elasticsearch.action.support.ActiveShardsWaiter;
+import org.elasticsearch.action.support.ActiveShardsObserver;
 import org.elasticsearch.cluster.AckedClusterStateUpdateTask;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.ack.ClusterStateUpdateResponse;
@@ -111,7 +111,7 @@ public class MetaDataCreateIndexService extends AbstractComponent {
     private final Environment env;
     private final NodeServicesProvider nodeServicesProvider;
     private final IndexScopedSettings indexScopedSettings;
-    private final ActiveShardsWaiter activeShardsWaiter;
+    private final ActiveShardsObserver activeShardsObserver;
 
     @Inject
     public MetaDataCreateIndexService(Settings settings, ClusterService clusterService,
@@ -140,7 +140,7 @@ public class MetaDataCreateIndexService extends AbstractComponent {
             }
             this.indexTemplateFilter = new IndexTemplateFilter.Compound(templateFilters);
         }
-        this.activeShardsWaiter = new ActiveShardsWaiter(settings, clusterService, threadPool);
+        this.activeShardsObserver = new ActiveShardsObserver(settings, clusterService, threadPool);
     }
 
     public void validateIndexName(String index, ClusterState state) {
@@ -185,18 +185,12 @@ public class MetaDataCreateIndexService extends AbstractComponent {
     public <T> void createIndexAndWaitForActiveShards(final CreateIndexClusterStateUpdateRequest request,
                                                       final ActionListener<T> listener,
                                                       final BiFunction<Boolean, Boolean, T> onResult) {
-        createIndex(request, activeShardsWaiter.wrapUpdateListenerWithWaiting(request, listener, (acked, timedOut) -> {
+        createIndex(request, activeShardsObserver.waitForActiveShards(request, listener, (acked, timedOut) -> {
             if (acked && timedOut) {
                 logger.debug("[{}] index created, but the operation timed out while waiting for " +
                     "enough shards to be started.", request.index());
             }
             return onResult.apply(acked, timedOut);
-        }, (throwable) -> {
-            if (throwable instanceof IndexAlreadyExistsException) {
-                logger.trace("[{}] failed to create", throwable, request.index());
-            } else {
-                logger.debug("[{}] failed to create", throwable, request.index());
-            }
         }));
     }
 
@@ -436,6 +430,16 @@ public class MetaDataCreateIndexService extends AbstractComponent {
                                 indicesService.removeIndex(createdIndex, removalReason != null ? removalReason : "failed to create index");
                             }
                         }
+                    }
+
+                    @Override
+                    public void onFailure(String source, Throwable t) {
+                        if (t instanceof IndexAlreadyExistsException) {
+                            logger.trace("[{}] failed to create", t, request.index());
+                        } else {
+                            logger.debug("[{}] failed to create", t, request.index());
+                        }
+                        super.onFailure(source, t);
                     }
                 });
     }

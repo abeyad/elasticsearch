@@ -126,7 +126,8 @@ public class TransportRolloverAction extends TransportMasterNodeAction<RolloverR
                                     new ActionListener<ClusterStateUpdateResponse>() {
                                         @Override
                                         public void onResponse(ClusterStateUpdateResponse clusterStateUpdateResponse) {
-                                            // TODO: what happens if this ClusterStateUpdateResponse is not acknowledged?
+                                            // Note: we are ignoring the acknowledgement from the cluster state update and
+                                            // just returning the rollover response
                                             listener.onResponse(rolloverResponse);
                                         }
 

@@ -129,12 +129,11 @@ public final class IndexSettings {
         1024, 1, Property.Dynamic, Property.IndexScope);
 
     /**
-     * The number of shard copies required to be active before proceed with the
-     * write operation or returning from an index creation operation.
+     * The number of shard copies required to be active before returning from an index creation operation.
      */
     public static final Setting<ActiveShardCount> WAIT_FOR_ACTIVE_SHARDS_SETTING =
         new Setting<>("index.wait_for_active_shards",
-                         (String) null,
+                         "1",
                          ActiveShardCount::parseString,
                          Setting.Property.Dynamic,
                          Setting.Property.IndexScope);

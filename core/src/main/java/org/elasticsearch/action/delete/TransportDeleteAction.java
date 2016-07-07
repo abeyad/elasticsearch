@@ -70,10 +70,7 @@ public class TransportDeleteAction extends TransportWriteAction<DeleteRequest, D
     protected void doExecute(Task task, final DeleteRequest request, final ActionListener<DeleteResponse> listener) {
         ClusterState state = clusterService.state();
         if (autoCreateIndex.shouldAutoCreate(request.index(), state)) {
-            CreateIndexRequest createIndexRequest = new CreateIndexRequest()
-                                                        .index(request.index()).cause("auto(delete api)")
-                                                        .masterNodeTimeout(request.timeout());
-            createIndexAction.execute(task, createIndexRequest, new ActionListener<CreateIndexResponse>() {
+            createIndexAction.execute(task, new CreateIndexRequest().index(request.index()).cause("auto(delete api)").masterNodeTimeout(request.timeout()), new ActionListener<CreateIndexResponse>() {
                 @Override
                 public void onResponse(CreateIndexResponse result) {
                     innerExecute(task, request, listener);
