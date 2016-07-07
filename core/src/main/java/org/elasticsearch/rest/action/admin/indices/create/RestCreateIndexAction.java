@@ -60,7 +60,7 @@ public class RestCreateIndexAction extends BaseRestHandler {
         client.admin().indices().create(createIndexRequest, new AcknowledgedRestListener<CreateIndexResponse>(channel) {
             @Override
             public void addCustomFields(XContentBuilder builder, CreateIndexResponse response) throws IOException {
-                response.addCustomFields(builder, response);
+                response.addCustomFields(builder);
             }
         });
     }

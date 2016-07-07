@@ -29,7 +29,6 @@ import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
-import org.elasticsearch.indices.IndexAlreadyExistsException;
 import org.elasticsearch.node.NodeClosedException;
 import org.elasticsearch.threadpool.ThreadPool;
 
@@ -58,13 +57,16 @@ public class ActiveShardsWaiter extends AbstractComponent {
      *
      * @param request the index creation request
      * @param actionListener the main listener that is listening for responses from the index creation event
-     * @param onResult blablalblaal
+     * @param onResult a function that takes the cluster state update acknowledged flag and timed out flag as parameters
+     *                 and returns a response to be sent on the listener
+     * @param onFailure executed on failure of the cluster state update, with the Throwable passed as input
      * @return ActionListener for responding to index creation cluster state events and sending the action response
      *         over the main listener, after waiting for the requested number of shards to be active
      */
     public <T> ActionListener<ClusterStateUpdateResponse> wrapUpdateListenerWithWaiting(final CreateIndexClusterStateUpdateRequest request,
-                                                                                    final ActionListener<T> actionListener,
-                                                                                    final BiFunction<Boolean, Boolean, T> onResult) {
+                                                                                        final ActionListener<T> actionListener,
+                                                                                        final BiFunction<Boolean, Boolean, T> onResult,
+                                                                                        final Consumer<Throwable> onFailure) {
         return new ActionListener<ClusterStateUpdateResponse>() {
             @Override
             public void onResponse(ClusterStateUpdateResponse response) {
@@ -89,12 +91,12 @@ public class ActiveShardsWaiter extends AbstractComponent {
                             @Override
                             public boolean apply(ClusterState previousState, ClusterState.ClusterStateStatus previousStatus,
                                                  ClusterState newState, ClusterState.ClusterStateStatus newStatus) {
-                                return waitForActiveShards.enoughShardsActive(newState, indexName, settings);
+                                return waitForActiveShards.enoughShardsActive(newState, indexName);
                             }
 
                             @Override
                             public boolean apply(ClusterChangedEvent changedEvent) {
-                                return waitForActiveShards.enoughShardsActive(changedEvent.state(), indexName, settings);
+                                return waitForActiveShards.enoughShardsActive(changedEvent.state(), indexName);
                             }
                         };
 
@@ -129,11 +131,7 @@ public class ActiveShardsWaiter extends AbstractComponent {
 
             @Override
             public void onFailure(Throwable t) {
-                if (t instanceof IndexAlreadyExistsException) {
-                    logger.trace("[{}] failed to create", t, request.index());
-                } else {
-                    logger.debug("[{}] failed to create", t, request.index());
-                }
+                onFailure.accept(t);
                 actionListener.onFailure(t);
             }
         };

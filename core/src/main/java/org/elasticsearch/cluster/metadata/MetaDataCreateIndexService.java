@@ -86,8 +86,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
-import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.Predicate;
 
 import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_AUTO_EXPAND_REPLICAS;
@@ -185,14 +183,20 @@ public class MetaDataCreateIndexService extends AbstractComponent {
     }
 
     public <T> void createIndexAndWaitForActiveShards(final CreateIndexClusterStateUpdateRequest request,
-                                                  final ActionListener<T> listener,
-                                                  final BiFunction<Boolean, Boolean, T> onResult) {
+                                                      final ActionListener<T> listener,
+                                                      final BiFunction<Boolean, Boolean, T> onResult) {
         createIndex(request, activeShardsWaiter.wrapUpdateListenerWithWaiting(request, listener, (acked, timedOut) -> {
             if (acked && timedOut) {
                 logger.debug("[{}] index created, but the operation timed out while waiting for " +
                     "enough shards to be started.", request.index());
             }
             return onResult.apply(acked, timedOut);
+        }, (throwable) -> {
+            if (throwable instanceof IndexAlreadyExistsException) {
+                logger.trace("[{}] failed to create", throwable, request.index());
+            } else {
+                logger.debug("[{}] failed to create", throwable, request.index());
+            }
         }));
     }
 

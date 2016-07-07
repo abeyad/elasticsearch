@@ -65,7 +65,7 @@ public class RestShrinkIndexAction extends BaseRestHandler {
         client.admin().indices().shrinkIndex(shrinkIndexRequest, new AcknowledgedRestListener<ShrinkResponse>(channel) {
             @Override
             public void addCustomFields(XContentBuilder builder, ShrinkResponse response) throws IOException {
-                response.addCustomFields(builder, response);
+                response.addCustomFields(builder);
             }
         });
     }

@@ -57,17 +57,14 @@ public class CreateIndexResponse extends AcknowledgedResponse {
 
     /**
      * Returns true if the request timed out waiting for the required number
-     * of active shards to be started.  If the index was not successfully
-     * created in the first place, then this value is meaningless.
+     * of active shards.  If the index was not successfully created in the
+     * first place, then this value is meaningless.
      */
     public boolean isTimedOutWaitingForShards() {
         return timedOutWaitingForShards;
     }
 
-    /**
-     * Adds custom fields to the AcknowledgedResponse's x-content.
-     */
-    public void addCustomFields(XContentBuilder builder, CreateIndexResponse response) throws IOException {
-        builder.field("timed_out_waiting_for_shards", response.isTimedOutWaitingForShards());
+    public void addCustomFields(XContentBuilder builder) throws IOException {
+        builder.field("timed_out_waiting_for_shards", isTimedOutWaitingForShards());
     }
 }

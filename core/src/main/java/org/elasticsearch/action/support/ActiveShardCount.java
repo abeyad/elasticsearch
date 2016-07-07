@@ -27,11 +27,9 @@ import org.elasticsearch.cluster.routing.IndexShardRoutingTable;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Writeable;
-import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.index.IndexSettings;
 
 import java.io.IOException;
-import java.util.Objects;
 
 import static org.elasticsearch.index.IndexSettings.WAIT_FOR_ACTIVE_SHARDS_SETTING;
 
@@ -99,12 +97,11 @@ public final class ActiveShardCount implements Writeable {
 
     /**
      * Resolve this instance to an actual integer value for the number of active shard counts.
-     * If {@link ActiveShardCount#ALL} are specified, then the given {@link IndexMetaData} is
+     * If {@link ActiveShardCount#ALL} is specified, then the given {@link IndexMetaData} is
      * used to determine what the actual active shard count should be.  The default value indicates
      * one active shard.
      */
     public int resolve(final IndexMetaData indexMetaData) {
-        Objects.requireNonNull(indexMetaData);
         if (this == ActiveShardCount.DEFAULT) {
             return 1;
         } else if (this == ActiveShardCount.ALL) {
@@ -117,7 +114,7 @@ public final class ActiveShardCount implements Writeable {
     /**
      * Parses the active shard count from the given string.  Valid values are "all" for
      * all shard copies, null for the default value set by {@link IndexSettings#WAIT_FOR_ACTIVE_SHARDS_SETTING}
-     * (which defaults to half the shard copies, or a numeric value greater than or equal to 0.
+     * (which defaults to one shard copy), or a numeric value greater than or equal to 0.
      * Any other input will throw an IllegalArgumentException.
      */
     public static ActiveShardCount parseString(final String str) {
@@ -140,17 +137,16 @@ public final class ActiveShardCount implements Writeable {
      * Returns true iff the given cluster state's routing table contains enough active
      * shards to meet the required shard count represented by this instance.
      */
-    public boolean enoughShardsActive(final ClusterState clusterState, final String indexName, final Settings settings) {
-        Objects.requireNonNull(clusterState);
-        Objects.requireNonNull(indexName);
-        Objects.requireNonNull(settings);
+    public boolean enoughShardsActive(final ClusterState clusterState, final String indexName) {
         if (this == ActiveShardCount.NONE) {
             // not waiting for any active shards
             return true;
         }
+        final IndexMetaData indexMetaData = clusterState.metaData().index(indexName);
+        assert indexMetaData != null;
         final ActiveShardCount waitForActiveShards;
         if (this == ActiveShardCount.DEFAULT) {
-            waitForActiveShards = WAIT_FOR_ACTIVE_SHARDS_SETTING.get(settings);
+            waitForActiveShards = WAIT_FOR_ACTIVE_SHARDS_SETTING.get(indexMetaData.getSettings());
         } else {
             waitForActiveShards = this;
         }
@@ -160,8 +156,6 @@ public final class ActiveShardCount implements Writeable {
             // all primary shards aren't active yet
             return false;
         }
-        final IndexMetaData indexMetaData = clusterState.metaData().index(indexName);
-        assert indexMetaData != null;
         for (final IntObjectCursor<IndexShardRoutingTable> shardRouting : indexRoutingTable.getShards()) {
             if (waitForActiveShards.checkWaitForActiveShards(shardRouting.value, indexMetaData) == false) {
                 // not enough active shard copies yet
@@ -176,8 +170,6 @@ public final class ActiveShardCount implements Writeable {
      * to meet the required shard count represented by this instance.
      */
     public boolean checkWaitForActiveShards(final IndexShardRoutingTable shardRoutingTable, final IndexMetaData indexMetaData) {
-        Objects.requireNonNull(shardRoutingTable);
-        Objects.requireNonNull(indexMetaData);
         if (shardRoutingTable.activeShards().size() < resolve(indexMetaData)) {
             // not enough active shard copies yet
             return false;

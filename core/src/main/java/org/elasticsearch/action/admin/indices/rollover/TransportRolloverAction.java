@@ -23,12 +23,9 @@ import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesClusterStateUpdateRequest;
 import org.elasticsearch.action.admin.indices.create.CreateIndexClusterStateUpdateRequest;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
-import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
-import org.elasticsearch.action.admin.indices.shrink.ShrinkResponse;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsResponse;
 import org.elasticsearch.action.support.ActionFilters;
 import org.elasticsearch.action.support.IndicesOptions;
-import org.elasticsearch.action.support.ActiveShardsWaiter;
 import org.elasticsearch.action.support.master.TransportMasterNodeAction;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.ClusterState;
@@ -50,7 +47,6 @@ import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
 
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -130,7 +126,8 @@ public class TransportRolloverAction extends TransportMasterNodeAction<RolloverR
                                     new ActionListener<ClusterStateUpdateResponse>() {
                                         @Override
                                         public void onResponse(ClusterStateUpdateResponse clusterStateUpdateResponse) {
-                                            listener.onResponse(rolloverResponse); // TODO: what happens if this ClusterStateUpdateResponse is not acknowledged?
+                                            // TODO: what happens if this ClusterStateUpdateResponse is not acknowledged?
+                                            listener.onResponse(rolloverResponse);
                                         }
 
                                         @Override
@@ -147,7 +144,7 @@ public class TransportRolloverAction extends TransportMasterNodeAction<RolloverR
 
                         };
                         createIndexService.createIndexAndWaitForActiveShards(updateRequest, wrappedListener, (acked, timedOut) ->
-                            new RolloverResponse(sourceIndexName, sourceIndexName, conditionResults, false, true, timedOut));
+                            new RolloverResponse(sourceIndexName, rolloverIndexName, conditionResults, false, true, timedOut));
                     } else {
                         // conditions not met
                         listener.onResponse(

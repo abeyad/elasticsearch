@@ -19,7 +19,6 @@
 
 package org.elasticsearch.action.support;
 
-import com.carrotsearch.hppc.cursors.IntObjectCursor;
 import com.carrotsearch.hppc.cursors.ObjectCursor;
 import org.elasticsearch.Version;
 import org.elasticsearch.cluster.ClusterName;
@@ -33,14 +32,12 @@ import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.common.UUIDs;
 import org.elasticsearch.common.io.stream.ByteBufferStreamInput;
 import org.elasticsearch.common.io.stream.BytesStreamOutput;
-import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.test.ESTestCase;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
 
 /**
  * Tests for the {@link ActiveShardCount} class
@@ -124,19 +121,19 @@ public class ActiveShardCountTests extends ESTestCase {
         final int numberOfReplicas = randomIntBetween(4, 7);
         final ActiveShardCount waitForActiveShards = ActiveShardCount.from(0);
         ClusterState clusterState = initializeWithNewIndex(indexName, numberOfShards, numberOfReplicas);
-        assertTrue(waitForActiveShards.enoughShardsActive(clusterState, indexName, Settings.EMPTY));
+        assertTrue(waitForActiveShards.enoughShardsActive(clusterState, indexName));
         clusterState = startPrimaries(clusterState, indexName);
-        assertTrue(waitForActiveShards.enoughShardsActive(clusterState, indexName, Settings.EMPTY));
+        assertTrue(waitForActiveShards.enoughShardsActive(clusterState, indexName));
         clusterState = startLessThanWaitOnShards(clusterState, indexName, waitForActiveShards);
-        assertTrue(waitForActiveShards.enoughShardsActive(clusterState, indexName, Settings.EMPTY));
+        assertTrue(waitForActiveShards.enoughShardsActive(clusterState, indexName));
         clusterState = startWaitOnShards(clusterState, indexName, waitForActiveShards);
-        assertTrue(waitForActiveShards.enoughShardsActive(clusterState, indexName, Settings.EMPTY));
+        assertTrue(waitForActiveShards.enoughShardsActive(clusterState, indexName));
         clusterState = startAllShards(clusterState, indexName);
-        assertTrue(waitForActiveShards.enoughShardsActive(clusterState, indexName, Settings.EMPTY));
+        assertTrue(waitForActiveShards.enoughShardsActive(clusterState, indexName));
     }
 
     public void testEnoughShardsActiveLevelOne() {
-        runTestForOneActiveShard(ActiveShardCount.from(1));
+        runTestForOneActiveShard(ActiveShardCount.ONE);
     }
 
     public void testEnoughShardsActiveLevelDefault() {
@@ -150,15 +147,15 @@ public class ActiveShardCountTests extends ESTestCase {
         final int numberOfReplicas = randomIntBetween(4, 7);
         final ActiveShardCount waitForActiveShards = ActiveShardCount.from(randomIntBetween(2, numberOfReplicas));
         ClusterState clusterState = initializeWithNewIndex(indexName, numberOfShards, numberOfReplicas);
-        assertFalse(waitForActiveShards.enoughShardsActive(clusterState, indexName, Settings.EMPTY));
+        assertFalse(waitForActiveShards.enoughShardsActive(clusterState, indexName));
         clusterState = startPrimaries(clusterState, indexName);
-        assertFalse(waitForActiveShards.enoughShardsActive(clusterState, indexName, Settings.EMPTY));
+        assertFalse(waitForActiveShards.enoughShardsActive(clusterState, indexName));
         clusterState = startLessThanWaitOnShards(clusterState, indexName, waitForActiveShards);
-        assertFalse(waitForActiveShards.enoughShardsActive(clusterState, indexName, Settings.EMPTY));
+        assertFalse(waitForActiveShards.enoughShardsActive(clusterState, indexName));
         clusterState = startWaitOnShards(clusterState, indexName, waitForActiveShards);
-        assertTrue(waitForActiveShards.enoughShardsActive(clusterState, indexName, Settings.EMPTY));
+        assertTrue(waitForActiveShards.enoughShardsActive(clusterState, indexName));
         clusterState = startAllShards(clusterState, indexName);
-        assertTrue(waitForActiveShards.enoughShardsActive(clusterState, indexName, Settings.EMPTY));
+        assertTrue(waitForActiveShards.enoughShardsActive(clusterState, indexName));
     }
 
     public void testEnoughShardsActiveLevelAll() {
@@ -168,17 +165,31 @@ public class ActiveShardCountTests extends ESTestCase {
         // both values should represent "all"
         final ActiveShardCount waitForActiveShards = randomBoolean() ? ActiveShardCount.from(numberOfReplicas + 1) : ActiveShardCount.ALL;
         ClusterState clusterState = initializeWithNewIndex(indexName, numberOfShards, numberOfReplicas);
-        assertFalse(waitForActiveShards.enoughShardsActive(clusterState, indexName, Settings.EMPTY));
+        assertFalse(waitForActiveShards.enoughShardsActive(clusterState, indexName));
         clusterState = startPrimaries(clusterState, indexName);
-        assertFalse(waitForActiveShards.enoughShardsActive(clusterState, indexName, Settings.EMPTY));
+        assertFalse(waitForActiveShards.enoughShardsActive(clusterState, indexName));
         clusterState = startLessThanWaitOnShards(clusterState, indexName, waitForActiveShards);
-        assertFalse(waitForActiveShards.enoughShardsActive(clusterState, indexName, Settings.EMPTY));
+        assertFalse(waitForActiveShards.enoughShardsActive(clusterState, indexName));
         clusterState = startAllShards(clusterState, indexName);
-        assertTrue(waitForActiveShards.enoughShardsActive(clusterState, indexName, Settings.EMPTY));
+        assertTrue(waitForActiveShards.enoughShardsActive(clusterState, indexName));
     }
 
     private void runTestForOneActiveShard(final ActiveShardCount activeShardCount) {
-
+        final String indexName = "test-idx";
+        final int numberOfShards = randomIntBetween(1, 5);
+        final int numberOfReplicas = randomIntBetween(4, 7);
+        assert activeShardCount == ActiveShardCount.ONE || activeShardCount == ActiveShardCount.DEFAULT;
+        final ActiveShardCount waitForActiveShards = activeShardCount;
+        ClusterState clusterState = initializeWithNewIndex(indexName, numberOfShards, numberOfReplicas);
+        assertFalse(waitForActiveShards.enoughShardsActive(clusterState, indexName));
+        clusterState = startPrimaries(clusterState, indexName);
+        assertTrue(waitForActiveShards.enoughShardsActive(clusterState, indexName));
+        clusterState = startLessThanWaitOnShards(clusterState, indexName, waitForActiveShards);
+        assertTrue(waitForActiveShards.enoughShardsActive(clusterState, indexName));
+        clusterState = startWaitOnShards(clusterState, indexName, waitForActiveShards);
+        assertTrue(waitForActiveShards.enoughShardsActive(clusterState, indexName));
+        clusterState = startAllShards(clusterState, indexName);
+        assertTrue(waitForActiveShards.enoughShardsActive(clusterState, indexName));
     }
 
     private ClusterState initializeWithNewIndex(final String indexName, final int numShards, final int numReplicas) {
