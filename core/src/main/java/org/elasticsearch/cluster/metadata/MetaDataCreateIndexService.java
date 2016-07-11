@@ -31,6 +31,7 @@ import org.elasticsearch.action.support.ActiveShardsObserver;
 import org.elasticsearch.cluster.AckedClusterStateUpdateTask;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.ack.ClusterStateUpdateResponse;
+import org.elasticsearch.cluster.ack.CreateIndexClusterStateUpdateResponse;
 import org.elasticsearch.cluster.block.ClusterBlock;
 import org.elasticsearch.cluster.block.ClusterBlockLevel;
 import org.elasticsearch.cluster.block.ClusterBlocks;
@@ -85,7 +86,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiFunction;
 import java.util.function.Predicate;
 
 import static org.elasticsearch.cluster.metadata.IndexMetaData.SETTING_AUTO_EXPAND_REPLICAS;
@@ -182,25 +182,24 @@ public class MetaDataCreateIndexService extends AbstractComponent {
         }
     }
 
-    public <T> void createIndexAndWaitForActiveShards(final CreateIndexClusterStateUpdateRequest request,
-                                                      final ActionListener<T> listener,
-                                                      final BiFunction<Boolean, Boolean, T> onResult) {
-        createIndex(request, activeShardsObserver.waitForActiveShards(
-            request.index(),
-            request.waitForActiveShards(),
-            request.masterNodeTimeout(),
-            listener,
-            (acked, timedOut) -> {
-                if (acked && timedOut) {
-                    logger.debug("[{}] index created, but the operation timed out while waiting for " +
-                        "enough shards to be started.", request.index());
-                }
-                return onResult.apply(acked, timedOut);
+    public void createIndex(final CreateIndexClusterStateUpdateRequest request,
+                            final ActionListener<CreateIndexClusterStateUpdateResponse> listener) {
+        onlyCreateIndex(request, ActionListener.wrap(response -> {
+            if (response.isAcknowledged()) {
+                activeShardsObserver.waitForActiveShards(request.index(), request.waitForActiveShards(), request.ackTimeout(),
+                    shardsAcked -> {
+                        logger.debug("[{}] index created, but the operation timed out while waiting for " +
+                                     "enough shards to be started.", request.index());
+                        listener.onResponse(new CreateIndexClusterStateUpdateResponse(response.isAcknowledged(), shardsAcked));
+                    }, listener::onFailure);
+            } else {
+                listener.onResponse(new CreateIndexClusterStateUpdateResponse(false, false));
             }
-        ));
-    }
+        }, listener::onFailure));
+}
 
-    public void createIndex(final CreateIndexClusterStateUpdateRequest request, final ActionListener<ClusterStateUpdateResponse> listener) {
+    private void onlyCreateIndex(final CreateIndexClusterStateUpdateRequest request,
+                                 final ActionListener<ClusterStateUpdateResponse> listener) {
         Settings.Builder updatedSettingsBuilder = Settings.builder();
         updatedSettingsBuilder.put(request.settings()).normalizePrefix(IndexMetaData.INDEX_SETTING_PREFIX);
         indexScopedSettings.validate(updatedSettingsBuilder);
@@ -439,13 +438,13 @@ public class MetaDataCreateIndexService extends AbstractComponent {
                     }
 
                     @Override
-                    public void onFailure(String source, Throwable t) {
-                        if (t instanceof IndexAlreadyExistsException) {
-                            logger.trace("[{}] failed to create", t, request.index());
+                    public void onFailure(String source, Exception e) {
+                        if (e instanceof IndexAlreadyExistsException) {
+                            logger.trace("[{}] failed to create", e, request.index());
                         } else {
-                            logger.debug("[{}] failed to create", t, request.index());
+                            logger.debug("[{}] failed to create", e, request.index());
                         }
-                        super.onFailure(source, t);
+                        super.onFailure(source, e);
                     }
                 });
     }

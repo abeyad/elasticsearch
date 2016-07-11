@@ -39,25 +39,25 @@ public final class RolloverResponse extends ActionResponse implements ToXContent
     private static final String DRY_RUN = "dry_run";
     private static final String ROLLED_OVER = "rolled_over";
     private static final String CONDITIONS = "conditions";
-    private static final String TIMED_OUT_WAITING_FOR_SHARDS = "timed_out_waiting_for_shards";
+    private static final String SHARDS_ACKED = "shards_acknowledged";
 
     private String oldIndex;
     private String newIndex;
     private Set<Map.Entry<String, Boolean>> conditionStatus;
     private boolean dryRun;
     private boolean rolledOver;
-    private boolean timedOutWaitingForShards;
+    private boolean shardsAcked;
 
     RolloverResponse() {
     }
 
     RolloverResponse(String oldIndex, String newIndex, Set<Condition.Result> conditionResults,
-                     boolean dryRun, boolean rolledOver, boolean timedOutWaitingForShards) {
+                     boolean dryRun, boolean rolledOver, boolean shardsAcked) {
         this.oldIndex = oldIndex;
         this.newIndex = newIndex;
         this.dryRun = dryRun;
         this.rolledOver = rolledOver;
-        this.timedOutWaitingForShards = timedOutWaitingForShards;
+        this.shardsAcked = shardsAcked;
         this.conditionStatus = conditionResults.stream()
             .map(result -> new AbstractMap.SimpleEntry<>(result.condition.toString(), result.matched))
             .collect(Collectors.toSet());
@@ -99,13 +99,11 @@ public final class RolloverResponse extends ActionResponse implements ToXContent
     }
 
     /**
-     * Returns true if there was a timeout waiting for enough active shards
-     * on the newly created rollover index.  Even if true, the rollover index
-     * itself could still be properly created, check {@link #isRolledOver()} to
-     * determine.
+     * Returns true if the requisite number of shards were started before
+     * returning from the index creation operation.
      */
-    public boolean isTimedOutWaitingForShards() {
-        return timedOutWaitingForShards;
+    public boolean isShardsAcked() {
+        return shardsAcked;
     }
 
     @Override
@@ -123,7 +121,7 @@ public final class RolloverResponse extends ActionResponse implements ToXContent
         conditionStatus = conditions;
         dryRun = in.readBoolean();
         rolledOver = in.readBoolean();
-        timedOutWaitingForShards = in.readBoolean();
+        shardsAcked = in.readBoolean();
     }
 
     @Override
@@ -138,7 +136,7 @@ public final class RolloverResponse extends ActionResponse implements ToXContent
         }
         out.writeBoolean(dryRun);
         out.writeBoolean(rolledOver);
-        out.writeBoolean(timedOutWaitingForShards);
+        out.writeBoolean(shardsAcked);
     }
 
     @Override
@@ -147,7 +145,7 @@ public final class RolloverResponse extends ActionResponse implements ToXContent
         builder.field(NEW_INDEX, newIndex);
         builder.field(ROLLED_OVER, rolledOver);
         builder.field(DRY_RUN, dryRun);
-        builder.field(TIMED_OUT_WAITING_FOR_SHARDS, timedOutWaitingForShards);
+        builder.field(SHARDS_ACKED, shardsAcked);
         builder.startObject(CONDITIONS);
         for (Map.Entry<String, Boolean> entry : conditionStatus) {
             builder.field(entry.getKey(), entry.getValue());

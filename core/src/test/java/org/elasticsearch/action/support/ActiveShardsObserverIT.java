@@ -45,12 +45,12 @@ public class ActiveShardsObserverIT extends ESIntegTestCase {
             settingsBuilder.put("index.routing.allocation.exclude._name", exclude);
         }
         Settings settings = settingsBuilder.build();
-        assertTrue(prepareCreate(indexName)
+        assertFalse(prepareCreate(indexName)
                        .setSettings(settings)
                        .setWaitForActiveShards(randomBoolean() ? ActiveShardCount.from(1) : ActiveShardCount.ALL)
                        .setTimeout("100ms")
                        .get()
-                       .isTimedOutWaitingForShards());
+                       .isShardsAcked());
     }
 
     public void testCreateIndexNoActiveShardsNoWaiting() throws Exception {
@@ -80,12 +80,12 @@ public class ActiveShardsObserverIT extends ESIntegTestCase {
                                 .put(INDEX_NUMBER_OF_SHARDS_SETTING.getKey(), randomIntBetween(1, 7))
                                 .put(INDEX_NUMBER_OF_REPLICAS_SETTING.getKey(), numReplicas)
                                 .build();
-        assertTrue(prepareCreate(indexName)
+        assertFalse(prepareCreate(indexName)
                        .setSettings(settings)
                        .setWaitForActiveShards(ActiveShardCount.from(randomIntBetween(numDataNodes + 1, numReplicas + 1)))
                        .setTimeout("100ms")
                        .get()
-                       .isTimedOutWaitingForShards());
+                       .isShardsAcked());
     }
 
     public void testCreateIndexEnoughActiveShards() throws Exception {
@@ -108,12 +108,12 @@ public class ActiveShardsObserverIT extends ESIntegTestCase {
                                 .put(INDEX_NUMBER_OF_SHARDS_SETTING.getKey(), randomIntBetween(1, 5))
                                 .put(INDEX_NUMBER_OF_REPLICAS_SETTING.getKey(), numReplicas)
                                 .build();
-        assertTrue(prepareCreate(indexName)
+        assertFalse(prepareCreate(indexName)
                        .setSettings(settings)
                        .setWaitForActiveShards(ActiveShardCount.ALL)
                        .setTimeout("100ms")
                        .get()
-                       .isTimedOutWaitingForShards());
+                       .isShardsAcked());
         if (client().admin().indices().prepareExists(indexName).get().isExists()) {
             assertAcked(client().admin().indices().prepareDelete(indexName));
         }
@@ -151,7 +151,7 @@ public class ActiveShardsObserverIT extends ESIntegTestCase {
         logger.info("--> ensure the create index request completes");
         CreateIndexResponse response = responseListener.get();
         assertAcked(response);
-        assertFalse(response.isTimedOutWaitingForShards());
+        assertTrue(response.isShardsAcked());
     }
 
 }

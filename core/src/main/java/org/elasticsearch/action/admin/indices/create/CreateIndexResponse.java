@@ -31,40 +31,39 @@ import java.io.IOException;
  */
 public class CreateIndexResponse extends AcknowledgedResponse {
 
-    private boolean timedOutWaitingForShards;
+    private boolean shardsAcked;
 
     protected CreateIndexResponse() {
     }
 
-    protected CreateIndexResponse(boolean acknowledged, boolean timedOutWaitingForShards) {
+    protected CreateIndexResponse(boolean acknowledged, boolean shardsAcked) {
         super(acknowledged);
-        this.timedOutWaitingForShards = timedOutWaitingForShards;
+        this.shardsAcked = shardsAcked;
     }
 
     @Override
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
         readAcknowledged(in);
-        timedOutWaitingForShards = in.readBoolean();
+        shardsAcked = in.readBoolean();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         writeAcknowledged(out);
-        out.writeBoolean(timedOutWaitingForShards);
+        out.writeBoolean(shardsAcked);
     }
 
     /**
-     * Returns true if the request timed out waiting for the required number
-     * of active shards.  If the index was not successfully created in the
-     * first place, then this value is meaningless.
+     * Returns true if the requisite number of shards were started before
+     * returning from the index creation operation.
      */
-    public boolean isTimedOutWaitingForShards() {
-        return timedOutWaitingForShards;
+    public boolean isShardsAcked() {
+        return shardsAcked;
     }
 
     public void addCustomFields(XContentBuilder builder) throws IOException {
-        builder.field("timed_out_waiting_for_shards", isTimedOutWaitingForShards());
+        builder.field("shards_acknowledged", isShardsAcked());
     }
 }

@@ -36,13 +36,14 @@
   - do:
       indices.create:
         index: test_index
+        timeout: 100ms
         master_timeout: 100ms
         wait_for_active_shards: 6
         body:
           settings:
             number_of_replicas: 5
 
-  - match: { timed_out_waiting_for_shards: true }
+  - match: { shards_acknowledged: false }
 
 ---
 "Create index with wait_for_active_shards set to all":
@@ -56,7 +57,7 @@
             number_of_replicas: "0"
 
   - match: { acknowledged: true }
-  - match: { timed_out_waiting_for_shards: false }
+  - match: { shards_acknowledged: true }
 
 ---
 "Create index with aliases":

@@ -115,37 +115,24 @@ public class TransportRolloverAction extends TransportMasterNodeAction<RolloverR
                     }
                     if (conditionResults.size() == 0 || conditionResults.stream().anyMatch(result -> result.matched)) {
                         CreateIndexClusterStateUpdateRequest updateRequest = prepareCreateIndexRequest(rolloverIndexName, rolloverRequest);
-                        ActionListener<RolloverResponse> wrappedListener = new ActionListener<RolloverResponse>() {
+                        createIndexService.createIndex(updateRequest, ActionListener.wrap(response -> {
+                            // switch the alias to point to the newly created index
+                            indexAliasesService.indicesAliases(
+                                prepareRolloverAliasesUpdateRequest(sourceIndexName, rolloverIndexName,
+                                    rolloverRequest),
+                                new ActionListener<ClusterStateUpdateResponse>() {
+                                    @Override
+                                    public void onResponse(ClusterStateUpdateResponse clusterStateUpdateResponse) {
+                                        listener.onResponse(new RolloverResponse(sourceIndexName, rolloverIndexName, conditionResults,
+                                                                                    false, true, response.isShardsAcked()));
+                                    }
 
-                            @Override
-                            public void onResponse(RolloverResponse rolloverResponse) {
-                                // switch the alias to point to the newly created index
-                                indexAliasesService.indicesAliases(
-                                    prepareRolloverAliasesUpdateRequest(sourceIndexName, rolloverIndexName,
-                                        rolloverRequest),
-                                    new ActionListener<ClusterStateUpdateResponse>() {
-                                        @Override
-                                        public void onResponse(ClusterStateUpdateResponse clusterStateUpdateResponse) {
-                                            // Note: we are ignoring the acknowledgement from the cluster state update and
-                                            // just returning the rollover response
-                                            listener.onResponse(rolloverResponse);
-                                        }
-
-                                        @Override
-                                        public void onFailure(Throwable e) {
-                                            listener.onFailure(e);
-                                        }
-                                    });
-                            }
-
-                            @Override
-                            public void onFailure(Throwable e) {
-                                listener.onFailure(e);
-                            }
-
-                        };
-                        createIndexService.createIndexAndWaitForActiveShards(updateRequest, wrappedListener, (acked, timedOut) ->
-                            new RolloverResponse(sourceIndexName, rolloverIndexName, conditionResults, false, true, timedOut));
+                                    @Override
+                                    public void onFailure(Exception e) {
+                                        listener.onFailure(e);
+                                    }
+                                });
+                        }, listener::onFailure));
                     } else {
                         // conditions not met
                         listener.onResponse(

@@ -104,7 +104,7 @@ public class ActiveShardCountTests extends ESTestCase {
     private void doWriteRead(ActiveShardCount activeShardCount) throws IOException {
         final BytesStreamOutput out = new BytesStreamOutput();
         activeShardCount.writeTo(out);
-        final ByteBufferStreamInput in = new ByteBufferStreamInput(ByteBuffer.wrap(out.bytes().toBytes()));
+        final ByteBufferStreamInput in = new ByteBufferStreamInput(ByteBuffer.wrap(out.bytes().toBytesRef().bytes));
         ActiveShardCount readActiveShardCount = ActiveShardCount.readFrom(in);
         if (activeShardCount == ActiveShardCount.DEFAULT
                 || activeShardCount == ActiveShardCount.ALL
