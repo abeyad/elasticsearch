@@ -20,8 +20,6 @@
 package org.elasticsearch.action.support;
 
 import org.elasticsearch.action.ActionListener;
-import org.elasticsearch.action.admin.indices.create.CreateIndexClusterStateUpdateRequest;
-import org.elasticsearch.cluster.ClusterChangedEvent;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.ClusterStateObserver;
 import org.elasticsearch.cluster.ack.ClusterStateUpdateResponse;
@@ -54,28 +52,29 @@ public class ActiveShardsObserver extends AbstractComponent {
      * waits on the specified number of active shards to be started before sending the action's response
      * over its listener.
      *
-     * @param request the index creation request
+     * @param indexName the index to wait for active shards on
+     * @param activeShardCount the number of active shards to wait on before returning
+     * @param timeout the timeout value
      * @param actionListener the main listener that is listening for responses from the index creation event
      * @param onResult a function that takes the cluster state update acknowledged flag and timed out flag as parameters
      *                 and returns a response to be sent on the listener
      * @return ActionListener for responding to index creation cluster state events and sending the action response
      *         over the main listener, after waiting for the requested number of shards to be active
      */
-    public <T> ActionListener<ClusterStateUpdateResponse> waitForActiveShards(final CreateIndexClusterStateUpdateRequest request,
+    public <T> ActionListener<ClusterStateUpdateResponse> waitForActiveShards(final String indexName,
+                                                                              final ActiveShardCount activeShardCount,
+                                                                              final TimeValue timeout,
                                                                               final ActionListener<T> actionListener,
                                                                               final BiFunction<Boolean, Boolean, T> onResult) {
         return new ActionListener<ClusterStateUpdateResponse>() {
             @Override
             public void onResponse(ClusterStateUpdateResponse response) {
                 if (response.isAcknowledged()) {
-                    final String indexName = request.index();
-                    final ActiveShardCount waitForActiveShards = request.waitForActiveShards();
-                    final TimeValue timeout = request.masterNodeTimeout();
                     try {
                         // the cluster state update with the created index has been acknowledged, now wait for the
                         // configured number of active shards to be allocated before returning, as that is when indexing
                         // operations can take place on the newly created index
-                        if (waitForActiveShards == ActiveShardCount.NONE) {
+                        if (activeShardCount == ActiveShardCount.NONE) {
                             // not waiting, so just run whatever we were to run when the waiting is
                             actionListener.onResponse(onResult.apply(true, false));
                             return;
@@ -84,18 +83,13 @@ public class ActiveShardsObserver extends AbstractComponent {
                         // wait for the configured number of active shards to be allocated before returning
                         final ClusterStateObserver observer =
                             new ClusterStateObserver(clusterService, logger, threadPool.getThreadContext());
-                        final ClusterStateObserver.ChangePredicate shardsAllocatedPredicate = new ClusterStateObserver.ChangePredicate() {
-                            @Override
-                            public boolean apply(ClusterState previousState, ClusterState.ClusterStateStatus previousStatus,
-                                                 ClusterState newState, ClusterState.ClusterStateStatus newStatus) {
-                                return waitForActiveShards.enoughShardsActive(newState, indexName);
-                            }
-
-                            @Override
-                            public boolean apply(ClusterChangedEvent changedEvent) {
-                                return waitForActiveShards.enoughShardsActive(changedEvent.state(), indexName);
-                            }
-                        };
+                        final ClusterStateObserver.ChangePredicate shardsAllocatedPredicate =
+                            new ClusterStateObserver.ValidationPredicate() {
+                                @Override
+                                protected boolean validate(final ClusterState newState) {
+                                    return activeShardCount.enoughShardsActive(newState, indexName);
+                                }
+                            };
 
                         final ClusterStateObserver.Listener observerListener = new ClusterStateObserver.Listener() {
                             @Override
@@ -118,7 +112,7 @@ public class ActiveShardsObserver extends AbstractComponent {
                         observer.waitForNextChange(observerListener, shardsAllocatedPredicate, timeout);
 
                     } catch (Exception ex) {
-                        logger.debug("[{}] index creation failed on waiting for shards", request.index());
+                        logger.debug("[{}] index creation failed on waiting for shards", indexName);
                         actionListener.onFailure(ex);
                     }
                 } else {

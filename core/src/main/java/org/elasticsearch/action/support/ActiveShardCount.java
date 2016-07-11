@@ -27,11 +27,8 @@ import org.elasticsearch.cluster.routing.IndexShardRoutingTable;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Writeable;
-import org.elasticsearch.index.IndexSettings;
 
 import java.io.IOException;
-
-import static org.elasticsearch.index.IndexSettings.WAIT_FOR_ACTIVE_SHARDS_SETTING;
 
 /**
  * A class whose instances represent a value for counting the number
@@ -102,26 +99,20 @@ public final class ActiveShardCount implements Writeable {
      * one active shard.
      */
     public int resolve(final IndexMetaData indexMetaData) {
-        final ActiveShardCount activeShardCount;
         if (this == ActiveShardCount.DEFAULT) {
-            activeShardCount = WAIT_FOR_ACTIVE_SHARDS_SETTING.get(indexMetaData.getSettings());
-        } else {
-            activeShardCount = this;
-        }
-        if (activeShardCount == ActiveShardCount.DEFAULT) {
             return 1;
-        } else if (activeShardCount == ActiveShardCount.ALL) {
+        } else if (this == ActiveShardCount.ALL) {
             return indexMetaData.getNumberOfReplicas() + 1;
         } else {
-            return activeShardCount.value;
+            return value;
         }
     }
 
     /**
      * Parses the active shard count from the given string.  Valid values are "all" for
-     * all shard copies, null for the default value set by {@link IndexSettings#WAIT_FOR_ACTIVE_SHARDS_SETTING}
-     * (which defaults to one shard copy), or a numeric value greater than or equal to 0.
-     * Any other input will throw an IllegalArgumentException.
+     * all shard copies, null for the default value (which defaults to one shard copy),
+     * or a numeric value greater than or equal to 0. Any other input will throw an
+     * IllegalArgumentException.
      */
     public static ActiveShardCount parseString(final String str) {
         if (str == null) {
@@ -155,12 +146,6 @@ public final class ActiveShardCount implements Writeable {
             // and we can stop waiting
             return true;
         }
-        final ActiveShardCount waitForActiveShards;
-        if (this == ActiveShardCount.DEFAULT) {
-            waitForActiveShards = WAIT_FOR_ACTIVE_SHARDS_SETTING.get(indexMetaData.getSettings());
-        } else {
-            waitForActiveShards = this;
-        }
         final IndexRoutingTable indexRoutingTable = clusterState.routingTable().index(indexName);
         assert indexRoutingTable != null;
         if (indexRoutingTable.allPrimaryShardsActive() == false) {
@@ -168,7 +153,7 @@ public final class ActiveShardCount implements Writeable {
             return false;
         }
         for (final IntObjectCursor<IndexShardRoutingTable> shardRouting : indexRoutingTable.getShards()) {
-            if (waitForActiveShards.enoughShardsActive(shardRouting.value, indexMetaData) == false) {
+            if (enoughShardsActive(shardRouting.value, indexMetaData) == false) {
                 // not enough active shard copies yet
                 return false;
             }

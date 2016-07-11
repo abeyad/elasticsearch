@@ -19,17 +19,13 @@
 
 package org.elasticsearch.action.support;
 
-import org.elasticsearch.ElasticsearchTimeoutException;
 import org.elasticsearch.action.ListenableActionFuture;
-import org.elasticsearch.action.admin.cluster.node.stats.NodeStats;
-import org.elasticsearch.action.admin.cluster.node.stats.NodesStatsResponse;
 import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.test.ESIntegTestCase;
 
 import static org.elasticsearch.cluster.metadata.IndexMetaData.INDEX_NUMBER_OF_REPLICAS_SETTING;
 import static org.elasticsearch.cluster.metadata.IndexMetaData.INDEX_NUMBER_OF_SHARDS_SETTING;
-import static org.elasticsearch.index.IndexSettings.WAIT_FOR_ACTIVE_SHARDS_SETTING;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
 
 /**
@@ -156,95 +152,6 @@ public class ActiveShardsObserverIT extends ESIntegTestCase {
         CreateIndexResponse response = responseListener.get();
         assertAcked(response);
         assertFalse(response.isTimedOutWaitingForShards());
-    }
-
-    public void testIndexWaitSettingUpdated() throws Exception {
-        final String indexName = "test-idx";
-
-        // updating wait_for_active_shards to an invalid number should fail
-        int numReplicas = internalCluster().numDataNodes() - 1;
-        final Settings settings = Settings.builder()
-                                      .put(indexSettings())
-                                      .put(INDEX_NUMBER_OF_SHARDS_SETTING.getKey(), randomIntBetween(1, 5))
-                                      .put(INDEX_NUMBER_OF_REPLICAS_SETTING.getKey(), numReplicas)
-                                      .put(WAIT_FOR_ACTIVE_SHARDS_SETTING.getKey(),
-                                           numReplicas + randomIntBetween(2, 5)) // exceeds # of shards
-                                      .build();
-        expectThrows(IllegalArgumentException.class, () -> prepareCreate(indexName).setSettings(settings).get());
-
-        // update wait_for_active_shards to a valid value, should honor it, but timeout as there aren't enough data nodes
-        numReplicas = internalCluster().numDataNodes() + randomInt(4);
-        Settings settings2 = Settings.builder()
-                                       .put(indexSettings())
-                                       .put(INDEX_NUMBER_OF_SHARDS_SETTING.getKey(), randomIntBetween(1, 5))
-                                       .put(INDEX_NUMBER_OF_REPLICAS_SETTING.getKey(), numReplicas)
-                                       .put(WAIT_FOR_ACTIVE_SHARDS_SETTING.getKey(), "all")
-                                       .build();
-        assertTrue(prepareCreate(indexName)
-                       .setSettings(settings2)
-                       .setTimeout("100ms")
-                       .get()
-                       .isTimedOutWaitingForShards());
-        assertAcked(client().admin().indices().prepareDelete(indexName));
-
-        // update wait_for_active_shards to a value greater than the number of data nodes, should time out
-        numReplicas = internalCluster().numDataNodes() + randomIntBetween(1, 4);
-        final Settings settings3 = Settings.builder()
-                        .put(indexSettings())
-                        .put(INDEX_NUMBER_OF_SHARDS_SETTING.getKey(), randomIntBetween(1, 5))
-                        .put(INDEX_NUMBER_OF_REPLICAS_SETTING.getKey(), numReplicas)
-                        .put(WAIT_FOR_ACTIVE_SHARDS_SETTING.getKey(),
-                             randomIntBetween(internalCluster().numDataNodes() + 1, numReplicas + 1))
-                        .build();
-        expectThrows(ElasticsearchTimeoutException.class,
-            () -> prepareCreate(indexName).setSettings(settings3).get("1s"));
-        assertAcked(client().admin().indices().prepareDelete(indexName));
-
-        // update wait_for_active_shards to a value lower than the number of data nodes, should succeed
-        settings2 = Settings.builder()
-                        .put(indexSettings())
-                        .put(INDEX_NUMBER_OF_SHARDS_SETTING.getKey(), randomIntBetween(1, 5))
-                        .put(INDEX_NUMBER_OF_REPLICAS_SETTING.getKey(), numReplicas)
-                        .put(WAIT_FOR_ACTIVE_SHARDS_SETTING.getKey(), randomIntBetween(0, internalCluster().numDataNodes()))
-                        .build();
-        CreateIndexResponse response = prepareCreate(indexName).setSettings(settings2).get("10s");
-        assertTrue(response.isAcknowledged());
-        assertFalse(response.isTimedOutWaitingForShards());
-        assertAcked(client().admin().indices().prepareDelete(indexName));
-
-        // update to null, should use default of 1
-        NodesStatsResponse nodeStats = client().admin().cluster().prepareNodesStats().get();
-        String dataNode = null;
-        for (NodeStats stat : nodeStats.getNodes()) {
-            if (stat.getNode().isDataNode()) {
-                dataNode = stat.getNode().getName();
-                break;
-            }
-        }
-        assertNotNull(dataNode);
-        settings2 = Settings.builder()
-                        .put(indexSettings())
-                        .put(INDEX_NUMBER_OF_SHARDS_SETTING.getKey(), randomIntBetween(1, 5))
-                        .put(INDEX_NUMBER_OF_REPLICAS_SETTING.getKey(), numReplicas)
-                        .put(WAIT_FOR_ACTIVE_SHARDS_SETTING.getKey(), (String) null)
-                        .put("index.routing.allocation.include._name", dataNode)
-                        .build();
-        response = prepareCreate(indexName).setSettings(settings2).get("10s");
-        assertTrue(response.isAcknowledged());
-        assertFalse(response.isTimedOutWaitingForShards());
-        assertAcked(client().admin().indices().prepareDelete(indexName));
-
-        final Settings.Builder settingsBuilder = Settings.builder()
-                                       .put(indexSettings())
-                                       .put(INDEX_NUMBER_OF_SHARDS_SETTING.getKey(), randomIntBetween(1, 5))
-                                       .put(INDEX_NUMBER_OF_REPLICAS_SETTING.getKey(), numReplicas)
-                                       .put(WAIT_FOR_ACTIVE_SHARDS_SETTING.getKey(), (String) null);
-        if (internalCluster().getNodeNames().length > 0) {
-            String exclude = String.join(",", internalCluster().getNodeNames());
-            settingsBuilder.put("index.routing.allocation.exclude._name", exclude);
-        }
-        expectThrows(ElasticsearchTimeoutException.class,
-            () -> prepareCreate(indexName).setSettings(settingsBuilder.build()).get("1s"));
     }
 
 }
