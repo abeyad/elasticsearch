@@ -26,7 +26,6 @@ import org.elasticsearch.common.settings.Setting.Property;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.unit.TimeValue;
-import org.elasticsearch.common.util.concurrent.FutureUtils;
 import org.elasticsearch.monitor.jvm.JvmStats.GarbageCollector;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.threadpool.ThreadPool.Cancellable;
@@ -36,7 +35,6 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 
@@ -68,6 +66,8 @@ public class JvmGcMonitorService extends AbstractLifecycleComponent {
     public static final Setting<Integer> GC_OVERHEAD_DEBUG_SETTING =
         Setting.intSetting("monitor.jvm.gc.overhead.debug", 10, 0, 100, Property.NodeScope);
 
+    private static final String DEFAULT_GC_THRESHOLD_NAME = "default"; // name for default GC logging level thresholds
+
     static class GcOverheadThreshold {
         final int warnThreshold;
         final int infoThreshold;
@@ -79,8 +79,6 @@ public class JvmGcMonitorService extends AbstractLifecycleComponent {
             this.debugThreshold = debugThreshold;
         }
     }
-
-
 
     static class GcThreshold {
         public final String name;
@@ -122,9 +120,7 @@ public class JvmGcMonitorService extends AbstractLifecycleComponent {
             TimeValue debug = getValidThreshold(entry.getValue(), entry.getKey(), "debug");
             gcThresholds.put(name, new GcThreshold(name, warn.millis(), info.millis(), debug.millis()));
         }
-        gcThresholds.putIfAbsent(GcNames.YOUNG, new GcThreshold(GcNames.YOUNG, 1000, 700, 400));
-        gcThresholds.putIfAbsent(GcNames.OLD, new GcThreshold(GcNames.OLD, 10000, 5000, 2000));
-        gcThresholds.putIfAbsent("default", new GcThreshold("default", 10000, 5000, 2000));
+        gcThresholds.putIfAbsent(DEFAULT_GC_THRESHOLD_NAME, new GcThreshold(DEFAULT_GC_THRESHOLD_NAME, 10000, 5000, 2000));
         this.gcThresholds = unmodifiableMap(gcThresholds);
 
         if (GC_OVERHEAD_WARN_SETTING.get(settings) <= GC_OVERHEAD_INFO_SETTING.get(settings)) {
@@ -429,7 +425,7 @@ public class JvmGcMonitorService extends AbstractLifecycleComponent {
 
                 GcThreshold gcThreshold = gcThresholds.get(gc.getName());
                 if (gcThreshold == null) {
-                    gcThreshold = gcThresholds.get("default");
+                    gcThreshold = gcThresholds.get(DEFAULT_GC_THRESHOLD_NAME);
                 }
 
                 long avgCollectionTime = collectionTime / collections;

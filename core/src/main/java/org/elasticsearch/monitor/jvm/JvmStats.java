@@ -78,15 +78,11 @@ public class JvmStats implements Streamable, ToXContent {
                 MemoryPoolMXBean memoryPoolMXBean = memoryPoolMXBeans.get(i);
                 MemoryUsage usage = memoryPoolMXBean.getUsage();
                 MemoryUsage peakUsage = memoryPoolMXBean.getPeakUsage();
-                String name = GcNames.getByMemoryPoolName(memoryPoolMXBean.getName(), null);
-                if (name == null) { // if we can't resolve it, its not interesting.... (Per Gen, Code Cache)
-                    continue;
-                }
-                pools.add(new MemoryPool(name,
-                        usage.getUsed() < 0 ? 0 : usage.getUsed(),
-                        usage.getMax() < 0 ? 0 : usage.getMax(),
-                        peakUsage.getUsed() < 0 ? 0 : peakUsage.getUsed(),
-                        peakUsage.getMax() < 0 ? 0 : peakUsage.getMax()
+                pools.add(new MemoryPool(memoryPoolMXBean.getName(),
+                        usage.getUsed(),
+                        usage.getMax() == -1 ? Long.MAX_VALUE : usage.getMax(),
+                        peakUsage.getUsed(),
+                        peakUsage.getMax() == -1 ? Long.MAX_VALUE : peakUsage.getMax()
                 ));
             } catch (Exception ex) {
                 /* ignore some JVMs might barf here with:
@@ -106,7 +102,7 @@ public class JvmStats implements Streamable, ToXContent {
         for (int i = 0; i < stats.gc.collectors.length; i++) {
             GarbageCollectorMXBean gcMxBean = gcMxBeans.get(i);
             stats.gc.collectors[i] = new GarbageCollector();
-            stats.gc.collectors[i].name = GcNames.getByGcName(gcMxBean.getName(), gcMxBean.getName());
+            stats.gc.collectors[i].name = gcMxBean.getName();
             stats.gc.collectors[i].collectionCount = gcMxBean.getCollectionCount();
             stats.gc.collectors[i].collectionTime = gcMxBean.getCollectionTime();
         }
