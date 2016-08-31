@@ -40,6 +40,7 @@ import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.gateway.GatewayAllocator;
+import org.elasticsearch.index.shard.ShardId;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -321,6 +322,48 @@ public class AllocationService extends AbstractComponent {
 
         shardsAllocator.allocate(allocation);
         assert RoutingNodes.assertShardStats(allocation.routingNodes());
+    }
+
+    /**
+     * TODO: javadocs
+     */
+    private AllocationDecision explainAllocation(ShardId shardId, boolean primary, RoutingAllocation allocation) {
+        AllocationDecision decision = null;
+        if (primary) {
+            ShardRouting primaryShard = allocation.routingTable().shardRoutingTable(shardId).primaryShard();
+            if (primaryShard.unassigned()) {
+                // 1. PrimaryShardsAllocator#makeAllocationDecision
+                // 2. BalancedShardsAllocator#makeAllocationDecision
+            } else {
+                // 1. BalancedShardsAllocator#moveShards
+                // 2. BalancedShardsAllocator#rebalance
+            }
+        } else {
+            // find an unassigned replica to explain, if there are none for
+            // this shardId, then explain where the shard could be relocated
+            List<ShardRouting> replicaShards = allocation.routingTable().shardRoutingTable(shardId).replicaShards();
+            if (replicaShards.size() == 0) {
+                throw new IllegalArgumentException("cannot explain allocation for shard " + shardId + "[r], no replicas exist");
+            }
+            ShardRouting shardToExplain = null;
+            for (final ShardRouting replicaShard : replicaShards) {
+                if (replicaShard.unassigned()) {
+                    shardToExplain = replicaShard;
+                    break;
+                }
+            }
+            if (shardToExplain == null) {
+                shardToExplain = replicaShards.get(0); // doesn't matter which replica is chosen
+                // explain possible relocation decisions for an already assigned replica shard
+                // 1. BalancedShardsAllocator#moveShards
+                // 2. BalancedShardsAllocator#rebalance
+            } else {
+                // 1. ReplicaShardsAllocator#makeAllocationDecision
+                // 2. BalancedShardsAllocator#makeAllocationDecision
+            }
+        }
+        assert decision != null : "AllocationDecision must have been calculated and set";
+        return decision;
     }
 
     private void deassociateDeadNodes(RoutingAllocation allocation) {
