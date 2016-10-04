@@ -24,6 +24,7 @@ import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.metadata.MetaData;
 import org.elasticsearch.cluster.node.DiscoveryNodes;
 import org.elasticsearch.cluster.routing.RoutingChangesObserver;
+import org.elasticsearch.cluster.routing.RoutingNode;
 import org.elasticsearch.cluster.routing.RoutingNodes;
 import org.elasticsearch.cluster.routing.RoutingTable;
 import org.elasticsearch.cluster.routing.allocation.decider.AllocationDeciders;
@@ -254,6 +255,17 @@ public class RoutingAllocation {
             return Decision.single(decision.type(), deciderLabel, reason, params);
         } else {
             return decision;
+        }
+    }
+
+    /**
+     * Create a node-level multi-decision, including the node id if the debug flag is set.
+     */
+    public Decision.Multi nodeDecision(RoutingNode node) {
+        if (debugDecision()) {
+            return new Decision.NodeDecision(node.nodeId());
+        } else {
+            return new Decision.Multi();
         }
     }
 

@@ -19,6 +19,7 @@
 
 package org.elasticsearch.cluster.routing.allocation.decider;
 
+import org.elasticsearch.cluster.routing.UnassignedInfo.AllocationStatus;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
@@ -27,6 +28,7 @@ import org.elasticsearch.common.xcontent.XContentBuilder;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -103,7 +105,8 @@ public abstract class Decision implements ToXContent {
     public enum Type {
         YES,
         NO,
-        THROTTLE;
+        THROTTLE,
+        NOT_TAKEN;
 
         public static Type resolve(String s) {
             return Type.valueOf(s.toUpperCase(Locale.ROOT));
@@ -118,6 +121,8 @@ public abstract class Decision implements ToXContent {
                     return YES;
                 case 2:
                     return THROTTLE;
+                case 3:
+                    return NOT_TAKEN;
                 default:
                     throw new IllegalArgumentException("No Type for integer [" + i + "]");
             }
@@ -133,6 +138,9 @@ public abstract class Decision implements ToXContent {
                     break;
                 case THROTTLE:
                     out.writeVInt(2);
+                    break;
+                case NOT_TAKEN:
+                    out.writeVInt(3);
                     break;
                 default:
                     throw new IllegalArgumentException("Invalid Type [" + type + "]");
@@ -299,7 +307,6 @@ public abstract class Decision implements ToXContent {
         @Override
         @Nullable
         public String label() {
-            // Multi decisions have no labels
             return null;
         }
 
@@ -314,11 +321,11 @@ public abstract class Decision implements ToXContent {
                 return true;
             }
 
-            if (object == null || getClass() != object.getClass()) {
+            if (object == null || object instanceof Multi == false) {
                 return false;
             }
 
-            final Decision.Multi m = (Decision.Multi) object;
+            final Multi m = (Multi) object;
 
             return this.decisions.equals(m.decisions);
         }
@@ -345,6 +352,251 @@ public abstract class Decision implements ToXContent {
             }
             builder.endArray();
             return builder;
+        }
+    }
+
+    /**
+     * A class that represents the decision taken for allocating a shard to a particular node.
+     */
+    public static class NodeDecision extends Multi {
+
+        private final String nodeId;
+        private final float weight;
+
+        public NodeDecision(String nodeId) {
+            this.nodeId = Objects.requireNonNull(nodeId);
+            this.weight = Float.POSITIVE_INFINITY;
+        }
+
+        public NodeDecision(String nodeId, float weight) {
+            this.nodeId = Objects.requireNonNull(nodeId);
+            this.weight = weight;
+        }
+
+        /**
+         * The node for which the allocation decision was taken.
+         */
+        public String getNodeId() {
+            return nodeId;
+        }
+
+        /**
+         * The weight of the node for which the decision was taken.
+         */
+        public float getWeight() {
+            return weight;
+        }
+
+        @Override
+        public boolean equals(final Object object) {
+            if (this == object) {
+                return true;
+            }
+
+            if (object == null || getClass() != object.getClass()) {
+                return false;
+            }
+
+            final NodeDecision d = (NodeDecision) object;
+            return super.equals(d)
+                       && nodeId.equals(d.nodeId)
+                       && weight == d.weight;
+        }
+
+        @Override
+        public int hashCode() {
+            int result = 31 * super.hashCode();
+            result = 31 * result + nodeId.hashCode();
+            result = 31 * result + Float.floatToIntBits(weight);
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder();
+            sb.append("[nodeId=").append(nodeId);
+            if (weight != Float.POSITIVE_INFINITY) {
+                sb.append(", weight=").append(weight);
+            }
+            sb.append(", decisions=").append(super.toString());
+            return sb.append("]").toString();
+        }
+
+        @Override
+        public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+            builder.field("node_id", nodeId);
+            if (weight != Float.POSITIVE_INFINITY) {
+                // only include the weight if it has a meaningful value,
+                // for some node decisions, weight isn't calculated
+                builder.field("weight", weight);
+            }
+            return super.toXContent(builder, params);
+        }
+    }
+
+    /**
+     * A class that represents the final decision for allocating a shard.
+     */
+    public static class FinalDecision extends Multi {
+
+        public static final FinalDecision NOT_TAKEN = new FinalDecision(Type.NOT_TAKEN, null, null, null, null);
+
+        private final Type type;
+        @Nullable
+        private final String explanation;
+        @Nullable
+        private final AllocationStatus allocationStatus;
+        @Nullable
+        private final String assignedNodeId;
+        @Nullable
+        private final String allocationId;
+
+        private FinalDecision(Type type, String explanation, String assignedNodeId,
+                              String allocationId, AllocationStatus allocationStatus) {
+            assert type != null : "the type of decision must be set";
+            assert type != Type.NO || allocationStatus != null : "NO decision must have an allocation status";
+            assert type != Type.YES || assignedNodeId != null : "YES decision must have an assigned node id";
+            assert allocationId == null || assignedNodeId != null : "must have an assigned node id if there is an allocation id";
+            this.type = type;
+            this.explanation = explanation;
+            this.assignedNodeId = assignedNodeId;
+            this.allocationId = allocationId;
+            this.allocationStatus = allocationStatus;
+        }
+
+        public static FinalDecision no(AllocationStatus allocationStatus, String explanation) {
+            return new FinalDecision(Type.NO, explanation, null, null, allocationStatus);
+        }
+
+        public static FinalDecision no(AllocationStatus allocationStatus, String explanation, Collection<Decision> decisions) {
+            final FinalDecision finalDecision = new FinalDecision(Type.NO, explanation, null, null, allocationStatus);
+            return addDecisions(finalDecision, decisions);
+        }
+
+        public static FinalDecision yes(String assignedNodeId, String allocationId, String explanation) {
+            return new FinalDecision(Type.YES, explanation, assignedNodeId, allocationId, null);
+        }
+
+        public static FinalDecision yes(String assignedNodeId, String allocationId, String explanation, Collection<Decision> decisions) {
+            final FinalDecision finalDecision = new FinalDecision(Type.YES, explanation, assignedNodeId, allocationId, null);
+            return addDecisions(finalDecision, decisions);
+        }
+
+        public static FinalDecision throttle(String explanation) {
+            return new FinalDecision(Type.THROTTLE, explanation, null, null, null);
+        }
+
+        public static FinalDecision throttle(String explanation, Collection<Decision> decisions) {
+            final FinalDecision finalDecision = new FinalDecision(Type.THROTTLE, explanation, null, null,
+                                                                     AllocationStatus.DECIDERS_THROTTLED);
+            addDecisions(finalDecision, decisions);
+            return finalDecision;
+        }
+
+        private static FinalDecision addDecisions(final FinalDecision finalDecision, final Collection<Decision> decisions) {
+            if (decisions != null) {
+                for (Decision decision : decisions) {
+                    finalDecision.add(decision);
+                }
+            }
+            return finalDecision;
+        }
+
+        @Override
+        public Type type() {
+            // not using the Multi decision's type method here because we override the final
+            // type of decision in the constructor
+            return type;
+        }
+
+        @Override
+        public String label() {
+            return explanation;
+        }
+
+        /**
+         * Returns the allocation status.  Only applicable if {@link #type()} returns {@link Type#NO}.
+         */
+        @Nullable
+        public AllocationStatus getAllocationStatus() {
+            return allocationStatus;
+        }
+
+        /**
+         * Returns the assigned node id for the shard as a result of this decision.  Only applicable
+         * if {@link #type()} returns {@link Type#YES}.
+         */
+        @Nullable
+        public String getAssignedNodeId() {
+            return assignedNodeId;
+        }
+
+        /**
+         * Returns the allocation id if using an already existing shard copy on a node to assign
+         * the shard to.  Only applicable if {@link #type()} returns {@link Type#YES}.
+         */
+        @Nullable
+        public String getAllocationId() {
+            return allocationId;
+        }
+
+        @Override
+        public boolean equals(final Object object) {
+            if (this == object) {
+                return true;
+            }
+
+            if (object == null || getClass() != object.getClass()) {
+                return false;
+            }
+
+            final FinalDecision fd = (FinalDecision) object;
+
+            return super.equals(object)
+                       && Objects.equals(type, fd.type)
+                       && Objects.equals(explanation, fd.explanation)
+                       && Objects.equals(allocationStatus, fd.allocationStatus)
+                       && Objects.equals(assignedNodeId, fd.assignedNodeId)
+                       && Objects.equals(allocationId, fd.allocationId);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = 31 * super.hashCode();
+            result = 31 * result + Objects.hash(type, explanation, allocationStatus, assignedNodeId, allocationId);
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder();
+            sb.append("FinalDecision[decision=").append(type);
+            if (assignedNodeId != null) {
+                sb.append(", assignedNodeId=").append(assignedNodeId);
+                if (allocationId != null) {
+                    sb.append(", allocationId=").append(allocationId);
+                }
+            } else {
+                sb.append(", allocationStatus=").append(allocationStatus);
+            }
+            return sb.append("]").toString();
+        }
+
+        @Override
+        public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+            assert explanation != null : "writing the decision to x-content must include an explanation";
+            builder.field("decision", type.toString());
+            builder.field("explanation", explanation);
+            if (assignedNodeId != null) {
+                builder.field("assigned_node_id", assignedNodeId);
+                if (allocationId != null) {
+                    builder.field("allocation_id", allocationId);
+                }
+            } else {
+                assert allocationStatus != null : "if node was not assigned, then allocation status must be set";
+                builder.field("allocation_status", allocationStatus.toString());
+            }
+            return super.toXContent(builder, params);
         }
     }
 }

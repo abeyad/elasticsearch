@@ -23,13 +23,10 @@ import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.cluster.routing.RoutingNode;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.routing.allocation.RoutingAllocation;
-import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
-import java.util.Set;
 
 /**
  * A composite {@link AllocationDecider} combining the "decision" of multiple
@@ -68,7 +65,7 @@ public class AllocationDeciders extends AllocationDecider {
         if (allocation.shouldIgnoreShardForNode(shardRouting.shardId(), node.nodeId())) {
             return Decision.NO;
         }
-        Decision.Multi ret = new Decision.Multi();
+        Decision.Multi ret = allocation.nodeDecision(node);
         for (AllocationDecider allocationDecider : allocations) {
             Decision decision = allocationDecider.canAllocate(shardRouting, node, allocation);
             // short track if a NO is returned.
@@ -99,7 +96,7 @@ public class AllocationDeciders extends AllocationDecider {
             }
             return Decision.NO;
         }
-        Decision.Multi ret = new Decision.Multi();
+        Decision.Multi ret = allocation.nodeDecision(node);
         for (AllocationDecider allocationDecider : allocations) {
             Decision decision = allocationDecider.canRemain(shardRouting, node, allocation);
             // short track if a NO is returned.
@@ -121,7 +118,7 @@ public class AllocationDeciders extends AllocationDecider {
 
     @Override
     public Decision canAllocate(IndexMetaData indexMetaData, RoutingNode node, RoutingAllocation allocation) {
-        Decision.Multi ret = new Decision.Multi();
+        Decision.Multi ret = allocation.nodeDecision(node);
         for (AllocationDecider allocationDecider : allocations) {
             Decision decision = allocationDecider.canAllocate(indexMetaData, node, allocation);
             // short track if a NO is returned.
@@ -159,7 +156,7 @@ public class AllocationDeciders extends AllocationDecider {
 
     @Override
     public Decision canAllocate(RoutingNode node, RoutingAllocation allocation) {
-        Decision.Multi ret = new Decision.Multi();
+        Decision.Multi ret = allocation.nodeDecision(node);
         for (AllocationDecider allocationDecider : allocations) {
             Decision decision = allocationDecider.canAllocate(node, allocation);
             // short track if a NO is returned.
@@ -202,7 +199,7 @@ public class AllocationDeciders extends AllocationDecider {
         if (allocation.shouldIgnoreShardForNode(shardRouting.shardId(), node.nodeId())) {
             return Decision.NO;
         }
-        Decision.Multi ret = new Decision.Multi();
+        Decision.Multi ret = allocation.nodeDecision(node);
         for (AllocationDecider decider : allocations) {
             Decision decision = decider.canForceAllocatePrimary(shardRouting, node, allocation);
             // short track if a NO is returned.
