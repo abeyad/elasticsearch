@@ -31,6 +31,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
+import static org.elasticsearch.cluster.routing.allocation.RoutingAllocation.DebugMode.EXCLUDE_YES_DECISIONS;
+
 /**
  * A composite {@link AllocationDecider} combining the "decision" of multiple
  * {@link AllocationDecider} implementations into a single allocation decision.
@@ -56,7 +58,8 @@ public class AllocationDeciders extends AllocationDecider {
                 } else {
                     ret.add(decision);
                 }
-            } else if (decision != Decision.ALWAYS) {
+            } else if (decision != Decision.ALWAYS
+                            && (allocation.getDebugDecision() != EXCLUDE_YES_DECISIONS || decision != Decision.YES)) {
                 ret.add(decision);
             }
         }
@@ -82,7 +85,8 @@ public class AllocationDeciders extends AllocationDecider {
                 } else {
                     ret.add(decision);
                 }
-            } else if (decision != Decision.ALWAYS) {
+            } else if (decision != Decision.ALWAYS
+                            && (allocation.getDebugDecision() != EXCLUDE_YES_DECISIONS || decision != Decision.YES)) {
                 // the assumption is that a decider that returns the static instance Decision#ALWAYS
                 // does not really implements canAllocate
                 ret.add(decision);
@@ -112,7 +116,8 @@ public class AllocationDeciders extends AllocationDecider {
                 } else {
                     ret.add(decision);
                 }
-            } else if (decision != Decision.ALWAYS) {
+            } else if (decision != Decision.ALWAYS
+                            && (allocation.getDebugDecision() != EXCLUDE_YES_DECISIONS || decision != Decision.YES)) {
                 ret.add(decision);
             }
         }
@@ -131,7 +136,8 @@ public class AllocationDeciders extends AllocationDecider {
                 } else {
                     ret.add(decision);
                 }
-            } else if (decision != Decision.ALWAYS) {
+            } else if (decision != Decision.ALWAYS
+                            && (allocation.getDebugDecision() != EXCLUDE_YES_DECISIONS || decision != Decision.YES)) {
                 ret.add(decision);
             }
         }
@@ -150,7 +156,8 @@ public class AllocationDeciders extends AllocationDecider {
                 } else {
                     ret.add(decision);
                 }
-            } else if (decision != Decision.ALWAYS) {
+            } else if (decision != Decision.ALWAYS
+                            && (allocation.getDebugDecision() != EXCLUDE_YES_DECISIONS || decision != Decision.YES)) {
                 ret.add(decision);
             }
         }
@@ -169,7 +176,8 @@ public class AllocationDeciders extends AllocationDecider {
                 } else {
                     ret.add(decision);
                 }
-            } else if (decision != Decision.ALWAYS) {
+            } else if (decision != Decision.ALWAYS
+                            && (allocation.getDebugDecision() != EXCLUDE_YES_DECISIONS || decision != Decision.YES)) {
                 ret.add(decision);
             }
         }
@@ -188,7 +196,8 @@ public class AllocationDeciders extends AllocationDecider {
                 } else {
                     ret.add(decision);
                 }
-            } else if (decision != Decision.ALWAYS) {
+            } else if (decision != Decision.ALWAYS
+                            && (allocation.getDebugDecision() != EXCLUDE_YES_DECISIONS || decision != Decision.YES)) {
                 ret.add(decision);
             }
         }
@@ -216,7 +225,8 @@ public class AllocationDeciders extends AllocationDecider {
                 } else {
                     ret.add(decision);
                 }
-            } else if (decision != Decision.ALWAYS) {
+            } else if (decision != Decision.ALWAYS
+                            && (allocation.getDebugDecision() != EXCLUDE_YES_DECISIONS || decision != Decision.YES)) {
                 ret.add(decision);
             }
         }

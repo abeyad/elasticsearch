@@ -19,7 +19,6 @@
 
 package org.elasticsearch.action.admin.cluster.allocation;
 
-import org.elasticsearch.client.Requests;
 import org.elasticsearch.cluster.routing.allocation.decider.Decision;
 import org.elasticsearch.test.ESSingleNodeTestCase;
 
@@ -40,7 +39,7 @@ public final class ClusterAllocationExplainTests extends ESSingleNodeTestCase {
         assertEquals("test", cae.getShard().getIndexName());
         assertEquals(0, cae.getShard().getId());
         assertEquals(false, cae.isPrimary());
-        assertNull(cae.getAssignedNodeId());
+        assertNull(cae.getCurrentNodeId());
         assertFalse(cae.isStillFetchingShardData());
         assertNotNull(cae.getUnassignedInfo());
         NodeExplanation explanation = cae.getNodeExplanations().values().iterator().next();
@@ -68,7 +67,7 @@ public final class ClusterAllocationExplainTests extends ESSingleNodeTestCase {
         assertEquals(0, cae.getShard().getId());
         assertEquals(true, cae.isPrimary());
         assertFalse(cae.isStillFetchingShardData());
-        assertNotNull("shard should have assigned node id", cae.getAssignedNodeId());
+        assertNotNull("shard should have assigned node id", cae.getCurrentNodeId());
         assertNull("assigned shard should not have unassigned info", cae.getUnassignedInfo());
         explanation = cae.getNodeExplanations().values().iterator().next();
         d = explanation.getDecision();

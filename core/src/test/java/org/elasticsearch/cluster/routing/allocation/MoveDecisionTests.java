@@ -19,7 +19,7 @@
 
 package org.elasticsearch.cluster.routing.allocation;
 
-import org.elasticsearch.cluster.routing.allocation.ShardAllocationDecision.WeightedDecision;
+import org.elasticsearch.cluster.routing.allocation.AllocateUnassignedDecision.WeightedDecision;
 import org.elasticsearch.cluster.routing.allocation.allocator.BalancedShardsAllocator.MoveDecision;
 import org.elasticsearch.cluster.routing.allocation.decider.Decision;
 import org.elasticsearch.cluster.routing.allocation.decider.Decision.Type;
@@ -79,9 +79,9 @@ public class MoveDecisionTests extends ESTestCase {
     }
 
     public void testDecisionWithExplain() {
-        Map<String, WeightedDecision> nodeDecisions = new HashMap<>();
-        nodeDecisions.put("node1", new WeightedDecision(randomFrom(Decision.NO, Decision.THROTTLE, Decision.YES), randomFloat()));
-        nodeDecisions.put("node2", new WeightedDecision(randomFrom(Decision.NO, Decision.THROTTLE, Decision.YES), randomFloat()));
+        Map<String, NodeAllocationResult> nodeDecisions = new HashMap<>();
+        nodeDecisions.put("node1", new NodeAllocationResult(randomFrom(Decision.NO, Decision.THROTTLE, Decision.YES), randomFloat()));
+        nodeDecisions.put("node2", new NodeAllocationResult(randomFrom(Decision.NO, Decision.THROTTLE, Decision.YES), randomFloat()));
         MoveDecision decision = MoveDecision.decision(Decision.NO, Type.NO, true, "node1", null, nodeDecisions);
         assertNotNull(decision.getFinalDecisionType());
         assertNotNull(decision.getFinalExplanation());

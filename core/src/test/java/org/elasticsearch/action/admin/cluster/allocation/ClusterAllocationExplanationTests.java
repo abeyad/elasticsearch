@@ -207,7 +207,7 @@ public final class ClusterAllocationExplanationTests extends ESTestCase {
         assertEquals(shard, cae2.getShard());
         assertTrue(cae2.isPrimary());
         assertTrue(cae2.isAssigned());
-        assertEquals("assignedNode", cae2.getAssignedNodeId());
+        assertEquals("assignedNode", cae2.getCurrentNodeId());
         assertNull(cae2.getUnassignedInfo());
         assertEquals(allocationDelay, cae2.getAllocationDelayMillis());
         assertEquals(remainingDelay, cae2.getRemainingDelayMillis());
