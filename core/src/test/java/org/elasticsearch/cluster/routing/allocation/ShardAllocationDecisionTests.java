@@ -37,9 +37,9 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.startsWith;
 
 /**
- * Unit tests for the {@link ShardAllocationDecision} class.
+ * Unit tests for the {@link AllocateUnassignedDecision} class.
  */
-public class AllocateUnassignedDecisionTests extends ESTestCase {
+public class ShardAllocationDecisionTests extends ESTestCase {
 
     private DiscoveryNode node1 = new DiscoveryNode("node1", buildNewFakeTransportAddress(), emptyMap(), emptySet(), Version.CURRENT);
     private DiscoveryNode node2 = new DiscoveryNode("node2", buildNewFakeTransportAddress(), emptyMap(), emptySet(), Version.CURRENT);
