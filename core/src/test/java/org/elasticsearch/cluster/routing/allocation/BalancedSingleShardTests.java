@@ -31,8 +31,6 @@ import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.cluster.routing.ShardRoutingState;
 import org.elasticsearch.cluster.routing.allocation.allocator.BalancedShardsAllocator;
 import org.elasticsearch.cluster.routing.allocation.allocator.BalancedShardsAllocator.Balancer;
-import org.elasticsearch.cluster.routing.allocation.allocator.BalancedShardsAllocator.NodeRebalanceDecision;
-import org.elasticsearch.cluster.routing.allocation.allocator.BalancedShardsAllocator.RebalanceDecision;
 import org.elasticsearch.cluster.routing.allocation.decider.AllocationDecider;
 import org.elasticsearch.cluster.routing.allocation.decider.AllocationDeciders;
 import org.elasticsearch.cluster.routing.allocation.decider.Decision;
@@ -74,7 +72,7 @@ public class BalancedSingleShardTests extends ESAllocationTestCase {
         assertNotNull(rebalanceDecision.getCanRebalanceDecision());
         assertEquals(Type.NO, rebalanceDecision.getFinalDecisionType());
         assertThat(rebalanceDecision.getFinalExplanation(), startsWith("cannot rebalance due to in-flight shard store fetches"));
-        assertNull(rebalanceDecision.getNodeDecisions());
+        assertEquals(clusterState.nodes().getSize() - 1, rebalanceDecision.getNodeDecisions().size());
         assertNull(rebalanceDecision.getAssignedNodeId());
 
         assertAssignedNodeRemainsSame(allocator, routingAllocation, shard);
@@ -95,8 +93,8 @@ public class BalancedSingleShardTests extends ESAllocationTestCase {
             new AllocationDeciders(Settings.EMPTY, Collections.singleton(noRebalanceDecider)), clusterState);
         RebalanceDecision rebalanceDecision = allocator.decideRebalance(shard, routingAllocation);
         assertEquals(canRebalanceDecision.type(), rebalanceDecision.getCanRebalanceDecision().type());
-        assertEquals(canRebalanceDecision.type(), rebalanceDecision.getFinalDecisionType());
-        assertEquals("rebalancing is not allowed", rebalanceDecision.getFinalExplanation());
+        assertEquals(Type.NO, rebalanceDecision.getFinalDecisionType());
+        assertEquals("rebalancing of the shard is not allowed in the cluster", rebalanceDecision.getFinalExplanation());
         assertNotNull(rebalanceDecision.getNodeDecisions());
         assertNull(rebalanceDecision.getAssignedNodeId());
         assertEquals(1, rebalanceDecision.getCanRebalanceDecision().getDecisions().size());
@@ -134,8 +132,7 @@ public class BalancedSingleShardTests extends ESAllocationTestCase {
         RebalanceDecision rebalanceDecision = rebalance.v2();
         assertEquals(Type.YES, rebalanceDecision.getCanRebalanceDecision().type());
         assertEquals(Type.NO, rebalanceDecision.getFinalDecisionType());
-        assertThat(rebalanceDecision.getFinalExplanation(),
-            startsWith("cannot rebalance shard, no other node exists that would form a more balanced"));
+        assertThat(rebalanceDecision.getFinalExplanation(), startsWith("cannot rebalance shard"));
         assertEquals(clusterState.nodes().getSize() - 1, rebalanceDecision.getNodeDecisions().size());
         assertNull(rebalanceDecision.getAssignedNodeId());
     }
@@ -222,7 +219,7 @@ public class BalancedSingleShardTests extends ESAllocationTestCase {
         assertEquals(shardToRebalance.relocatingNodeId(), rebalanceDecision.getAssignedNodeId());
         // make sure all excluded nodes returned a NO decision
         for (String exludedNode : excludeNodes) {
-            NodeRebalanceDecision nodeRebalanceDecision = rebalanceDecision.getNodeDecisions().get(exludedNode);
+            RebalanceDecision.NodeRebalanceResult nodeRebalanceDecision = rebalanceDecision.getNodeDecisions().get(exludedNode);
             assertEquals(Type.NO, nodeRebalanceDecision.getCanAllocateDecision().type());
         }
     }
