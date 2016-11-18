@@ -167,9 +167,11 @@ public abstract class ReplicaShardAllocator extends BaseGatewayShardAllocator {
         if (shardStores.hasData() == false) {
             logger.trace("{}: ignoring allocation, still fetching shard stores", unassignedShard);
             allocation.setHasPendingAsyncFetch();
-            if (explain == false) {
-                return AllocateUnassignedDecision.no(AllocationStatus.FETCHING_SHARD_DATA, null);
+            Map<String, NodeAllocationResult> nodeDecisions = null;
+            if (explain) {
+                nodeDecisions = getDecisionsForAllNodes(allocation);
             }
+            return AllocateUnassignedDecision.no(AllocationStatus.FETCHING_SHARD_DATA, nodeDecisions);
         }
 
         ShardRouting primaryShard = routingNodes.activePrimary(unassignedShard.shardId());
