@@ -69,7 +69,6 @@ import org.elasticsearch.index.IndexService;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.indices.IndicesService;
 import org.elasticsearch.indices.InvalidIndexNameException;
-import org.elasticsearch.indices.recovery.RecoverySettings;
 import org.elasticsearch.ingest.IngestTestPlugin;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.repositories.IndexId;
@@ -1064,6 +1063,40 @@ public class SharedClusterSnapshotRestoreIT extends AbstractSnapshotIntegTestCas
         createSnapshotResponse = client.admin().cluster().prepareCreateSnapshot("test-repo", "test-snap-1").setWaitForCompletion(true).setIndices("test-idx-*").get();
         assertThat(createSnapshotResponse.getSnapshotInfo().successfulShards(), greaterThan(0));
         assertThat(createSnapshotResponse.getSnapshotInfo().successfulShards(), equalTo(createSnapshotResponse.getSnapshotInfo().totalShards()));
+    }
+
+    @AwaitsFix(bugUrl = "https://github.com/elastic/elasticsearch/issues/9433")
+    public void testRestoreSnapshotWithDeletedShardDataTerminatesGracefully() throws Exception {
+        final String repository = "test-repo";
+        final String index = "test-idx";
+        final String snapshot = "test-snap";
+        final Path repoPath = randomRepoPath();
+        logger.info("-->  creating repository at {}", repoPath.toAbsolutePath());
+        assertAcked(client().admin().cluster().preparePutRepository(repository).setType("fs").setSettings(
+            Settings.builder()
+                .put("location", repoPath)
+                .put("compress", false))
+        );
+
+        createIndex(index);
+        logger.info("--> indexing some data");
+        for (int i = 0; i < 100; i++) {
+            index(index, "doc", Integer.toString(i), "foo", "bar" + i);
+        }
+
+        logger.info("--> creating snapshot");
+        client().admin().cluster()
+            .prepareCreateSnapshot(repository, snapshot)
+            .setWaitForCompletion(true)
+            .setIndices(index)
+            .get();
+
+        logger.info("--> deleting shard data");
+        Files.delete(Files.list(repoPath.resolve("indices")).findFirst().get().resolve("0").resolve("__0"));
+
+        logger.info("--> restoring snapshot");
+        client().admin().indices().prepareDelete(index).get();
+        client().admin().cluster().prepareRestoreSnapshot(repository, snapshot).setWaitForCompletion(true).get();
     }
 
     public void testSnapshotClosedIndex() throws Exception {
