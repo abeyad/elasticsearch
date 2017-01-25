@@ -21,45 +21,78 @@ import org.elasticsearch.gradle.test.RestIntegTestTask
 
 apply plugin: 'elasticsearch.standalone-test'
 
-task oldClusterTest(type: RestIntegTestTask) {
-  mustRunAfter(precommit)
-  cluster {
-    distribution = 'zip'
-    bwcVersion = '5.2.0-SNAPSHOT' // TODO: either randomize, or make this settable with sysprop
-    numBwcNodes = 2
-    numNodes = 2
-    clusterName = 'rolling-upgrade'
+/**
+ * A two-dimensional array of backward compatibility versions.  The first
+ * dimension of the array are the versions that the current version
+ * is backward compatible with.  The second dimension are the bug fix releases.
+ * We test against a randomly selected point release (second dimension of the array)
+ * of every version (first dimension of the array).  For example, if the current
+ * version is compatible with 5.0, 5.1, and 5.2, then the value for bwcVersions
+ * would look like:
+ *    def bwcVersions = [['5.0.0', '5.0.1', '5.0.2'], ['5.1.0', '5.1.1'], ['5.2.0']]
+ */
+def bwcVersions = [['5.3.0-SNAPSHOT']]
+
+def rollingUpgradeTasks = []
+chooseReleaseForEachVersion(bwcVersions).each { currBwcVersion ->
+
+  def oldClusterTestName = "oldClusterTest_$currBwcVersion"
+  def mixedClusterTestName = "mixedClusterTest_$currBwcVersion"
+  def upgradedClusterTestName = "upgradedClusterTest_$currBwcVersion"
+
+  tasks.create(name: oldClusterTestName, type: RestIntegTestTask) {
+    mustRunAfter(precommit)
+    cluster {
+      distribution = 'zip'
+      bwcVersion = "$currBwcVersion"
+      numBwcNodes = 2
+      numNodes = 2
+      clusterName = 'rolling-upgrade'
+    }
+    systemProperty 'tests.rest.suite', 'old_cluster'
   }
-  systemProperty 'tests.rest.suite', 'old_cluster'
+
+  def oldClusterTest = tasks[oldClusterTestName]
+  tasks.create(name: mixedClusterTestName, type: RestIntegTestTask) {
+    dependsOn(oldClusterTest, "$oldClusterTestName#node1.stop")
+    cluster {
+      distribution = 'zip'
+      clusterName = 'rolling-upgrade'
+      unicastTransportUri = { seedNode, node, ant -> oldClusterTest.nodes.get(0).transportUri() }
+      dataDir = "${-> oldClusterTest.nodes[1].dataDir}"
+    }
+    systemProperty 'tests.rest.suite', 'mixed_cluster'
+    finalizedBy "$oldClusterTestName#node0.stop"
+  }
+
+  def mixedClusterTest = tasks[mixedClusterTestName]
+  tasks.create(name: upgradedClusterTestName, type: RestIntegTestTask) {
+    dependsOn(mixedClusterTest, "$oldClusterTestName#node0.stop")
+    cluster {
+      distribution = 'zip'
+      clusterName = 'rolling-upgrade'
+      unicastTransportUri = { seedNode, node, ant -> mixedClusterTest.nodes.get(0).transportUri() }
+      dataDir = "${-> oldClusterTest.nodes[0].dataDir}"
+    }
+    systemProperty 'tests.rest.suite', 'upgraded_cluster'
+    // only need to kill the mixed cluster tests node here because we explicitly told it to not stop nodes upon completion
+    finalizedBy "$mixedClusterTestName#stop"
+  }
+
+  rollingUpgradeTasks.add(tasks[upgradedClusterTestName])
 }
 
-task mixedClusterTest(type: RestIntegTestTask) {
-  dependsOn(oldClusterTest, 'oldClusterTest#node1.stop')
-  cluster {
-    distribution = 'zip'
-    clusterName = 'rolling-upgrade'
-    unicastTransportUri = { seedNode, node, ant -> oldClusterTest.nodes.get(0).transportUri() }
-    dataDir = "${-> oldClusterTest.nodes[1].dataDir}"
+ArrayList<String> chooseReleaseForEachVersion(ArrayList<ArrayList<String>> bwcVersionsMatrix) {
+  def bwcVersions = []
+  def random = new Random()
+  bwcVersionsMatrix.each { bwcVersionList ->
+    bwcVersions.add(bwcVersionList[random.nextInt(bwcVersionList.size())])
   }
-  systemProperty 'tests.rest.suite', 'mixed_cluster'
-  finalizedBy 'oldClusterTest#node0.stop'
-}
-
-task upgradedClusterTest(type: RestIntegTestTask) {
-  dependsOn(mixedClusterTest, 'oldClusterTest#node0.stop')
-  cluster {
-    distribution = 'zip'
-    clusterName = 'rolling-upgrade'
-    unicastTransportUri = { seedNode, node, ant -> mixedClusterTest.nodes.get(0).transportUri() }
-    dataDir = "${-> oldClusterTest.nodes[0].dataDir}"
-  }
-  systemProperty 'tests.rest.suite', 'upgraded_cluster'
-  // only need to kill the mixed cluster tests node here because we explicitly told it to not stop nodes upon completion
-  finalizedBy 'mixedClusterTest#stop'
+  bwcVersions
 }
 
 task integTest {
-  dependsOn = [upgradedClusterTest]
+  dependsOn = rollingUpgradeTasks
 }
 
 test.enabled = false // no unit tests for rolling upgrades, only the rest integration test
